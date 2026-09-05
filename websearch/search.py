@@ -240,26 +240,61 @@ class WebSearchEngine:
                 EC.presence_of_element_located((By.TAG_NAME, 'body'))
             )
             logger.debug('Navigated to yandex.com/images/search-by-image/')
+            # On the dedicated page, click the "Image search" button to reveal the upload control.
+            time.sleep(2)
+            for sel in ['button[aria-label="Image search"]', 'button[aria-label*="image"]', 'button[aria-label*="search"]']:
+                try:
+                    els = driver.find_elements(By.CSS_SELECTOR, sel)
+                    for el in els:
+                        if el and el.is_enabled():
+                            el.click()
+                            logger.debug('Clicked Image Search button on dedicated page via: %s', sel)
+                            time.sleep(2)
+                            return
+                except Exception:
+                    continue
         except Exception as exc:
             logger.warning('Could not open search-by-image page: %s', exc)
 
     def _wait_for_file_input(self, driver: Any) -> Optional[Any]:
-        wait = WebDriverWait(driver, self.timeout)
+        """Wait for and return a visible file input for image upload.
+
+        On Yandex, the file input may be present in the DOM but hidden until
+        the user clicks the camera/image-search button. We check both
+        visibility and DOM presence.
+        """
+        # First try to detect a visible file input.
+        wait = WebDriverWait(driver, 10)
         for css in (
+            'input[type=file][accept*="image"]',
             'input[type=file]',
             'input[name=file]',
-            'input[accept*="image"]',
             '#search-by-image__upload input',
             'div.search-by-image__upload input',
         ):
             try:
-                el = wait.until(
-                    EC.presence_of_element_located((By.CSS_SELECTOR, css))
-                )
-                if el and el.tag_name == 'input' and el.get_attribute('type') == 'file':
-                    return el
+                els = driver.find_elements(By.CSS_SELECTOR, css)
+                for el in els:
+                    if el.tag_name == 'input' and el.get_attribute('type') == 'file':
+                        if el.is_displayed():
+                            return el
+                        # If hidden but present, we can still use it (send_keys works on hidden inputs too).
+                        logger.debug('Found hidden file input, will use it.')
+                        return el
             except Exception:
                 continue
+
+        # Fallback: wait a bit longer and check again.
+        try:
+            time.sleep(2)
+            for css in ('input[type=file]', 'input[accept*="image"]'):
+                els = driver.find_elements(By.CSS_SELECTOR, css)
+                for el in els:
+                    if el.tag_name == 'input' and el.get_attribute('type') == 'file':
+                        return el
+        except Exception:
+            pass
+
         return None
 
     def _extract_results(self, driver: Any) -> List[WebSearchResult]:
@@ -268,20 +303,26 @@ class WebSearchEngine:
 
         Yandex result cards typically contain an <a> with an href (the
         destination page), an image, and a caption snippet.
+
+        The page body text after a search looks like:
+          Similar images
+          Sites
+          474x592
+          Anime icon shoto
+          pinterest.com
+          ...
         """
         results: List[WebSearchResult] = []
         seen: set = set()
 
-        # Yandex uses several different card structures; try a few known selectors.
+        # Approach 1: Yandex uses <div> cards with class serp-item or similar.
         card_selectors = [
             'div.serp-item',
             'div.CompactView',
             'div[style*="background-image"]',
-            'a[href*="yandex"]',  # sometimes the first match is an inline result
-            'div. NODISMEDIA',  # not real but as a guard
         ]
 
-        elements = []
+        elements: List[Any] = []
         for sel in card_selectors:
             try:
                 els = driver.find_elements(By.CSS_SELECTOR, sel)
@@ -291,65 +332,94 @@ class WebSearchEngine:
             except Exception:
                 continue
 
-        if not elements:
-            # Generic fallback: collect all links that look like external pages.
-            try:
-                links = driver.find_elements(By.CSS_SELECTOR, 'a:not([href*="yandex"])')
-                elements = links
-            except Exception:
-                return []
-
-        for el in elements:
-            try:
-                text = (el.text or '').strip()
-                if not text and el.tag_name == 'a':
-                    text = el.get_attribute('aria-label') or ''
-                if len(text) < 3:
-                    continue
-
-                url = None
+        if elements:
+            for el in elements:
                 try:
-                    url = el.get_attribute('href')
-                except Exception:
-                    pass
+                    text = (el.text or '').strip()
+                    url = el.get_attribute('href') or ''
 
-                if not url:
-                    # If this is an image card, the actual link may be inside.
-                    try:
-                        link_inside = el.find_element(By.CSS_SELECTOR, 'a[href]')
-                        url = link_inside.get_attribute('href')
-                    except Exception:
+                    # If the element itself is not a link, look for inner links.
+                    if not url:
+                        try:
+                            link_inside = el.find_element(By.CSS_SELECTOR, 'a[href]')
+                            url = link_inside.get_attribute('href')
+                            text = link_inside.text or text
+                        except Exception:
+                            pass
+
+                    if not url or url in seen or 'yandex' in url:
                         continue
+                    seen.add(url)
 
-                if not url or url in seen:
-                    continue
-                seen.add(url)
+                    title = text.split('\n')[0].strip() if text else ''
+                    description = text
 
-                # Prefer the page title or the image caption as the "title"
-                title = text.split('\n')[0].strip() if text else ''
-                description = text
+                    image_url: Optional[str] = None
+                    try:
+                        img_el = el.find_element(By.CSS_SELECTOR, 'img')
+                        image_url = img_el.get_attribute('src') or img_el.get_attribute('data-src')
+                    except Exception:
+                        pass
 
-                # Try to grab the source image URL
-                image_url = None
-                try:
-                    img_el = el.find_element(By.CSS_SELECTOR, 'img')
-                    image_url = img_el.get_attribute('src') or img_el.get_attribute('data-src')
+                    results.append(
+                        WebSearchResult(
+                            url=url,
+                            title=title,
+                            description=description,
+                            image_url=image_url,
+                            page_type=_page_type(url),
+                        )
+                    )
+                    if len(results) >= 10:
+                        break
                 except Exception:
                     pass
 
-                results.append(
-                    WebSearchResult(
-                        url=url,
-                        title=title,
-                        description=description,
-                        image_url=image_url,
-                        page_type=_page_type(url),
+        # Approach 2: If card-based extraction did not work, parse the page
+        # body text to find links and their captions (Yandex text format).
+        if not results:
+            try:
+                body_text = driver.find_element(By.TAG_NAME, 'body').text
+                lines_list = [l.strip() for l in body_text.split('\n') if l.strip()]
+
+                # Find all external links on the page.
+                links = driver.find_elements(By.CSS_SELECTOR, 'a[href]')
+                external = [l for l in links if l.get_attribute('href') and 'yandex' not in (l.get_attribute('href') or '')]
+
+                for link in external:
+                    url = link.get_attribute('href') or ''
+                    if not url or url in seen:
+                        continue
+                    seen.add(url)
+
+                    link_text = (link.text or '').strip()
+                    title = link_text if link_text else ''
+                    description = link_text if link_text else ''
+
+                    # Heuristic: the line right before a domain mention might be the title.
+                    domain = _domain(url)
+                    for i, line in enumerate(lines_list):
+                        if domain in line.lower() and i > 0:
+                            prev = lines_list[i - 1]
+                            if prev and prev != url and len(prev) > 2:
+                                if not title:
+                                    title = prev
+                                description = prev + '\n' + line
+                            break
+
+                    results.append(
+                        WebSearchResult(
+                            url=url,
+                            title=title,
+                            description=description,
+                            image_url=None,
+                            page_type=_page_type(url),
+                        )
                     )
-                )
-                if len(results) >= 10:
-                    break
+                    if len(results) >= 10:
+                        break
             except Exception:
-                continue
+                pass
 
         return results
 
