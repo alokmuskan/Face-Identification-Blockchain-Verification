@@ -1,0 +1,42 @@
+{% extends 'base.html' %}
+{% block title %}{{ subject.name }} - History - Face Chain Verify{% endblock %}
+{% block content %}
+<h1>{{ subject.name }}</h1>
+<p class="muted">Subject ID <code>{{ subject.subject_id }}</code> - {{ subject.embedding_count }} face embedding(s) - enrolled {{ subject.created_at | dt }}</p>
+
+<section class="panel">
+  <h2>On-chain history</h2>
+  {% if events %}
+  <table>
+    <thead><tr><th>Time</th><th>Type</th><th>Result</th><th>Similarity</th><th>Image hash</th><th>Block</th></tr></thead>
+    <tbody>
+    {% for tx in events %}
+      <tr>
+        <td>{{ tx.block_time | dt }}</td>
+        <td>{{ tx.type }}</td>
+        <td>{% if tx.result %}<span class="badge {{ 'ok' if tx.result == 'VERIFIED' else 'bad' }}">{{ tx.result }}</span>{% else %}-{% endif %}</td>
+        <td>{{ tx.similarity if tx.similarity is defined else '-' }}</td>
+        <td><code class="wrap">{{ tx.image_hash or tx.probe_image_hash or '-' }}</code></td>
+        <td>#{{ tx.block_index }}</td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <p class="muted">No on-chain events for this subject yet.</p>
+  {% endif %}
+</section>
+
+<section class="panel">
+  <h2>Enrollment images</h2>
+  {% if subject.images %}
+  <div class="thumbs">
+    {% for image in subject.images %}
+    <img src="{{ url_for('media', relpath=image) }}" alt="Enrollment image">
+    {% endfor %}
+  </div>
+  {% else %}
+  <p class="muted">No stored images.</p>
+  {% endif %}
+</section>
+{% endblock %}

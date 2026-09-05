@@ -1,0 +1,68 @@
+{% extends 'base.html' %}
+{% block title %}Dashboard - Face Chain Verify{% endblock %}
+{% block content %}
+<h1>Dashboard</h1>
+<section class="cards">
+  <div class="card">
+    <div class="card-value">{{ stats.subjects }}</div>
+    <div class="card-label">Registered subjects</div>
+  </div>
+  <div class="card">
+    <div class="card-value">{{ stats.blocks }}</div>
+    <div class="card-label">Blocks mined</div>
+  </div>
+  <div class="card">
+    <div class="card-value">{{ stats.pending_transactions }}</div>
+    <div class="card-label">Pending transactions</div>
+  </div>
+  <div class="card">
+    <div class="card-value {% if stats.chain_valid %}ok{% else %}bad{% endif %}">{% if stats.chain_valid %}VALID{% else %}INVALID{% endif %}</div>
+    <div class="card-label">Chain integrity</div>
+  </div>
+</section>
+
+<section class="panel">
+  <h2>Recent on-chain events</h2>
+  {% if events %}
+  <table>
+    <thead><tr><th>Time</th><th>Type</th><th>Subject</th><th>Result</th><th>Similarity</th><th>Block</th></tr></thead>
+    <tbody>
+    {% for tx in events %}
+      <tr>
+        <td>{{ tx.timestamp | dt }}</td>
+        <td>{{ tx.type }}</td>
+        <td>
+          {% if tx.subject_id and tx.subject_id != 'unknown' %}
+          <a href="{{ url_for('history', subject_id=tx.subject_id) }}">{{ tx.subject_name or tx.subject_id }}</a>
+          {% else %}
+          {{ tx.subject_name or tx.subject_id or '-' }}
+          {% endif %}
+        </td>
+        <td>{% if tx.result %}<span class="badge {{ 'ok' if tx.result == 'VERIFIED' else 'bad' }}">{{ tx.result }}</span>{% else %}-{% endif %}</td>
+        <td>{{ tx.similarity if tx.similarity is defined else '-' }}</td>
+        <td>#{{ tx.block_index }}</td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <p class="muted">No events yet. Register a face to create the first block.</p>
+  {% endif %}
+</section>
+
+<section class="panel">
+  <h2>Enrolled subjects</h2>
+  {% if subjects %}
+  <ul class="subjects">
+    {% for subject in subjects %}
+    <li>
+      <a href="{{ url_for('history', subject_id=subject.subject_id) }}">{{ subject.name }}</a>
+      <span class="muted">{{ subject.embedding_count }} embedding(s) - updated {{ subject.updated_at | dt }}</span>
+    </li>
+    {% endfor %}
+  </ul>
+  {% else %}
+  <p class="muted">No subjects enrolled yet. Head to the Register page.</p>
+  {% endif %}
+</section>
+{% endblock %}

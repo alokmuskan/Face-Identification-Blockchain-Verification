@@ -1,0 +1,26 @@
+{% extends 'base.html' %}
+{% block title %}Verify - Face Chain Verify{% endblock %}
+{% block content %}
+<h1>Chain integrity</h1>
+{% if report.valid %}
+<div class="alert ok">Chain is valid - {{ report.blocks_checked }} block(s) re-hashed; links and proof-of-work confirmed.</div>
+{% else %}
+<div class="alert bad">Chain is INVALID - {{ report.errors | length }} problem(s) detected.</div>
+<ul class="errors">
+  {% for err in report.errors %}
+  <li>Block #{{ err.index }}: {{ err.reason }}</li>
+  {% endfor %}
+</ul>
+{% endif %}
+
+<section class="panel">
+  <h2>What this check covers</h2>
+  <ul class="checks">
+    <li>Every stored block hash matches the hash of its own content.</li>
+    <li>Every block hash satisfies the proof-of-work difficulty ({{ stats.difficulty }} leading hex zeros).</li>
+    <li>Every block links to the hash of its predecessor.</li>
+  </ul>
+  <p class="muted">If a historical transaction (a face registration or verification) were altered, its block hash would change and the chain would fail validation from that point on.</p>
+  <p><a class="btn secondary" href="{{ url_for('ledger') }}">Open the ledger</a></p>
+</section>
+{% endblock %}

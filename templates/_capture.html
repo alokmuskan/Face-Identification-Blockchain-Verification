@@ -1,0 +1,19 @@
+{# Shared image capture widget: file upload or live camera frame. #}
+<div class="capture">
+  <div class="capture-controls">
+    <label class="btn secondary">Upload photo<input type="file" id="file-input" accept="image/*"></label>
+    <button type="button" id="camera-btn" class="btn secondary">Use camera</button>
+  </div>
+  <div id="camera-box" class="camera-box" hidden>
+    <video id="camera-video" autoplay playsinline muted></video>
+    <div class="capture-controls">
+      <button type="button" id="capture-btn" class="btn">Capture frame</button>
+      <button type="button" id="camera-stop" class="btn secondary">Stop camera</button>
+    </div>
+  </div>
+  <div id="preview-box" class="preview-box" hidden>
+    <img id="preview-img" alt="Selected frame preview">
+    <p class="muted" id="preview-note"></p>
+  </div>
+  <input type="hidden" name="image_data" id="image-data">
+</div>

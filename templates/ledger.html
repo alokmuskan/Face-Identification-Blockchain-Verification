@@ -1,0 +1,45 @@
+{% extends 'base.html' %}
+{% block title %}Ledger - Face Chain Verify{% endblock %}
+{% block content %}
+<h1>Blockchain ledger</h1>
+<p class="muted">{{ stats.blocks }} block(s) - difficulty {{ stats.difficulty }} (leading hex zeros) - {{ stats.pending_transactions }} pending transaction(s).</p>
+
+{% for block in blocks %}
+<section class="panel block-panel">
+  <details {% if loop.first %}open{% endif %}>
+    <summary>
+      <span class="block-index">Block #{{ block.index }}</span>
+      <span class="muted">{{ block.timestamp | dt }} - nonce {{ block.nonce }} - {{ block.transactions | length }} tx(s)</span>
+    </summary>
+    <dl class="kv">
+      <dt>Hash</dt><dd><code class="wrap">{{ block.hash }}</code></dd>
+      <dt>Previous hash</dt><dd><code class="wrap">{{ block.previous_hash }}</code></dd>
+    </dl>
+    {% for tx in block.transactions %}
+    <div class="tx">
+      <div class="tx-head">
+        <span class="badge">{{ tx.type }}</span>
+        {% if tx.result %}<span class="badge {{ 'ok' if tx.result == 'VERIFIED' else 'bad' }}">{{ tx.result }}</span>{% endif %}
+        {% if tx.subject_id %}<span class="muted">subject: {{ tx.subject_name or tx.subject_id }} ({{ tx.subject_id }})</span>{% endif %}
+        {% if tx.web_search_count is defined %}
+        <span class="muted">web matches: {{ tx.web_search_count }}</span>
+        {% endif %}
+      </div>
+      {% if tx.web_search_results %}
+      <div class="tx-web-results">
+        <div class="tx-subhead">Web/social media matches</div>
+        {% for hit in tx.web_search_results %}
+        <div class="search-hit tiny">
+          <span class="badge tiny {{ 'ok' if hit.page_type == 'social_media' else 'badge' }}">{{ hit.page_type }}</span>
+          <span class="muted">{{ hit.url }}</span>
+        </div>
+        {% endfor %}
+      </div>
+      {% endif %}
+      <pre class="tx-json">{{ tx | tojson(indent=2) }}</pre>
+    </div>
+    {% endfor %}
+  </details>
+</section>
+{% endfor %}
+{% endblock %}

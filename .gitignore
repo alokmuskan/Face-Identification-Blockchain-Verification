@@ -1,0 +1,25 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.pytest_cache/
+
+# Runtime data (ledger, face store, images) - never commit personal data
+data/
+
+# Downloaded ONNX models (re-fetch with: python tools/fetch_models.py)
+models/
+
+# Local logs and pid files
+*.log
+*.pid
+
+# Repowise local index cache
+.repowise/
+
+# VS Code / MCP local config
+.vscode/
+.mcp.json
+.claude/

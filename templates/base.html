@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{% block title %}Face Chain Verify{% endblock %}</title>
+<link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="{{ url_for('dashboard') }}">Face<span>Chain</span>Verify</a>
+  <nav>
+    <a href="{{ url_for('dashboard') }}">Dashboard</a>
+    <a href="{{ url_for('register') }}">Register</a>
+    <a href="{{ url_for('identify') }}">Identify</a>
+    <a href="{{ url_for('ledger') }}">Ledger</a>
+    <a href="{{ url_for('verify_page') }}">Verify</a>
+  </nav>
+</header>
+<main class="container">
+{% block content %}{% endblock %}
+</main>
+<footer class="footer">Face Identification and Blockchain Verification - local demo. All data stays on this machine.</footer>
+{% block scripts %}{% endblock %}
+</body>
+</html>

@@ -1,0 +1,7 @@
+{% extends 'base.html' %}
+{% block title %}Error - Face Chain Verify{% endblock %}
+{% block content %}
+<h1>Something went wrong</h1>
+<div class="alert bad">{{ message }}</div>
+<p><a class="btn secondary" href="{{ url_for('dashboard') }}">Back to dashboard</a></p>
+{% endblock %}

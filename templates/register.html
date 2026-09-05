@@ -1,0 +1,33 @@
+{% extends 'base.html' %}
+{% block title %}Register - Face Chain Verify{% endblock %}
+{% block content %}
+<h1>Register a face</h1>
+<p class="muted">Enroll a subject with a clear, front-facing photo. The face embedding is stored locally and a registration event is mined into the blockchain.</p>
+
+<section class="panel">
+  <form method="post" enctype="multipart/form-data" class="stack">
+    <label for="name">Subject name</label>
+    <input type="text" id="name" name="name" required maxlength="80" placeholder="e.g. Alice Example">
+    {% include '_capture.html' %}
+    <button type="submit" class="btn primary">Register face</button>
+  </form>
+</section>
+
+{% if error %}<div class="alert bad">{{ error }}</div>{% endif %}
+
+{% if result %}
+<section class="panel result">
+  <h2>Registration recorded on-chain</h2>
+  <p><strong>{{ result.subject.name }}</strong> enrolled with {{ result.subject.embedding_count }} face embedding(s).</p>
+  <dl class="kv">
+    <dt>Subject ID</dt><dd><code>{{ result.subject.subject_id }}</code></dd>
+    <dt>Image hash (SHA-256)</dt><dd><code class="wrap">{{ result.transaction.image_hash }}</code></dd>
+    <dt>Block</dt><dd>#{{ result.block.index }} - mined {{ result.block.timestamp | dt }}</dd>
+    <dt>Block hash</dt><dd><code class="wrap">{{ result.block.hash }}</code></dd>
+    <dt>Nonce</dt><dd>{{ result.block.nonce }}</dd>
+  </dl>
+  <p><a class="btn secondary" href="{{ url_for('history', subject_id=result.subject.subject_id) }}">View subject history</a></p>
+</section>
+{% endif %}
+{% endblock %}
+{% block scripts %}<script src="{{ url_for('static', filename='capture.js') }}"></script>{% endblock %}

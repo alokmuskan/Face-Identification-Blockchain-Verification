@@ -1,0 +1,54 @@
+{% extends 'base.html' %}
+{% block title %}Identify - Face Chain Verify{% endblock %}
+{% block content %}
+<h1>Identify a face</h1>
+<p class='muted'>Submit a probe photo. The system matches it against enrolled subjects, records the outcome on the blockchain and returns the verdict.</p>
+
+<section class='panel'>
+  <form method='post' enctype='multipart/form-data' class='stack'>
+    {% include '_capture.html' %}
+    <button type='submit' class='btn primary'>Identify and record</button>
+  </form>
+</section>
+
+{% if error %}<div class='alert bad'>{{ error }}</div>{% endif %}
+
+{% if result %}
+<section class='panel result'>
+  <h2>
+    {% if result.result == 'VERIFIED' %}<span class='badge ok'>VERIFIED</span>{% else %}<span class='badge bad'>REJECTED</span>{% endif %}
+    {% if result.match.subject %}Matched: {{ result.match.subject.name }}{% elif result.match.candidate %}Closest: {{ result.match.candidate.name }} (below threshold){% else %}No subjects enrolled yet{% endif %}
+  </h2>
+  <p>Cosine similarity <strong>{{ result.match.similarity }}</strong> against threshold <strong>{{ result.match.threshold }}</strong>.</p>
+  <div class='simbar'><div class='simbar-fill {{ 'ok' if result.match.matched else 'bad' }}' style='width: {{ ((result.match.similarity + 1) / 2 * 100) | round(1) }}%;'></div></div>
+  <dl class='kv'>
+    <dt>Probe image hash</dt><dd><code class='wrap'>{{ result.transaction.probe_image_hash }}</code></dd>
+    <dt>Block</dt><dd>#{{ result.block.index }} - mined {{ result.block.timestamp | dt }}</dd>
+    <dt>Block hash</dt><dd><code class='wrap'>{{ result.block.hash }}</code></dd>
+  </dl>
+  {% if result.match.subject %}
+  <p><a class='btn secondary' href='{{ url_for('history', subject_id=result.match.subject.subject_id) }}'>View subject history</a></p>
+  {% endif %}
+
+  {% if result.web_results %}
+  <section class='panel'>
+    <h2>Web / social media matches</h2>
+    <p class='muted'>Reverse image search returned {{ result.web_results | length }} result(s) for the probe image.</p>
+    {% for hit in result.web_results %}
+    <div class='search-hit'>
+      <div class='hit-head'>
+        <span class='badge {{ 'ok' if hit.page_type == 'social_media' else 'badge' }}'>{{ hit.page_type }}</span>
+        <a href='{{ hit.url }}' target='_blank'>{{ hit.title }}</a>
+      </div>
+      <p class='muted'>{{ hit.description }}</p>
+      <a href='{{ hit.url }}' target='_blank' class='btn secondary small'>Open link</a>
+    </div>
+    {% endfor %}
+  </section>
+  {% else %}
+  <p class='muted'>Reverse image search did not return external matches for this image.</p>
+  {% endif %}
+</section>
+{% endif %}
+{% endblock %}
+{% block scripts %}<script src='{{ url_for('static', filename='capture.js') }}'></script>{% endblock %}
