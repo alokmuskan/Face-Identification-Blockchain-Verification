@@ -31,9 +31,28 @@
     "type": "function"
   },
   {
-    "inputs": [{"internalType": "string", "name": "", "type": "string"}],
+    "inputs": [
+      {"internalType": "string", "name": "", "type": "string"},
+      {"internalType": "bool", "name": "includeLocalBlockHash", "type": "bool"}
+    ],
     "name": "records",
-    "outputs": [{"internalType": "bytes32", "name": "", "type": "bytes32"}],
+    "outputs": [
+      {"internalType": "bytes32", "name": "recordHash", "type": "bytes32"},
+      {"internalType": "bytes32", "name": "localBlockHash", "type": "bytes32"}
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {"internalType": "string", "name": "subjectId", "type": "string"},
+      {"internalType": "bool", "name": "includeLocalBlockHash", "type": "bool"}
+    ],
+    "name": "getRecord",
+    "outputs": [
+      {"internalType": "bytes32", "name": "recordHash", "type": "bytes32"},
+      {"internalType": "bytes32", "name": "localBlockHash", "type": "bytes32"}
+    ],
     "stateMutability": "view",
     "type": "function"
   },
@@ -73,9 +92,39 @@
     "type": "function"
   },
   {
-    "inputs": [{"internalType": "string", "name": "subjectId", "type": "string"}],
+    "inputs": [
+      {"internalType": "string", "name": "subjectId", "type": "string"},
+      {"internalType": "bytes32", "name": "recordHash", "type": "bytes32"},
+      {"internalType": "uint256", "name": "similarity", "type": "uint256"},
+      {"internalType": "string", "name": "result", "type": "string"},
+      {"internalType": "string", "name": "probeImageHash", "type": "string"},
+      {"internalType": "uint256", "name": "webResultCount", "type": "uint256"},
+      {"internalType": "bytes32", "name": "localBlockHash", "type": "bytes32"}
+    ],
+    "name": "createRecord",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {"internalType": "string", "name": "subjectId", "type": "string"}
+    ],
     "name": "getRecord",
-    "outputs": [{"internalType": "bytes32", "name": "", "type": "bytes32"}],
+    "outputs": [{"internalType": "bytes32", "name": "recordHash", "type": "bytes32"}],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {"internalType": "string", "name": "subjectId", "type": "string"},
+      {"internalType": "bool", "name": "includeLocalBlockHash", "type": "bool"}
+    ],
+    "name": "getRecord",
+    "outputs": [
+      {"internalType": "bytes32", "name": "recordHash", "type": "bytes32"},
+      {"internalType": "bytes32", "name": "localBlockHash", "type": "bytes32"}
+    ],
     "stateMutability": "view",
     "type": "function"
   },

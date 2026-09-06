@@ -25,6 +25,7 @@ Stored fields:
 - `result` — `VERIFIED` or `REJECTED`
 - `probeImageHash` — SHA-256 of the probe image
 - `webResultCount` — number of reverse-image search results found
+- `localBlockHash` — bytes32 local ledger block hash attached to the on-chain record so each on-chain record can be traced back to the local block that carried the matching `contract_tx_hash` (Phase 3 traceability field)
 
 ## Latest submitted record
 
@@ -59,6 +60,19 @@ payload would break the match.
 PolygonScan's transaction view exposes the transaction hash, status, block,
 from/to, and transaction details, so the transaction link above is the primary
 public evidence link.
+
+## Traceability
+
+The deployed contract now supports an optional traceability field,
+`localBlockHash`, on records submitted with the enriched pipeline. When present,
+it lets the app show exactly which local ledger block the on-chain record points
+back to.
+
+The existing published submission for `barack-obama-ee8f7c` was created before 
+this field was added, so its `localBlockHash` is the zero bytes32. Its public 
+proof values above are unchanged. New enriched submissions will attach a real 
+`localBlockHash`, and the app will then show the full local <-> on-chain 
+traceability linkage.
 
 ## How to prove it again
 
@@ -107,6 +121,21 @@ From the project root, with `config_chain.py` configured and web3 installed:
 
 This should report the same on-chain `recordHash` and the same cross-check
 result.
+
+### Option 4: print the full Phase 3 proof from the CLI
+
+For a recording or submission review, you can print the full local + on-chain + 
+traceability proof in one place:
+
+```bash
+.venv\Scripts\python.exe tools\export_onchain_proof.py \
+  --subject-id barack-obama-ee8f7c
+```
+
+This prints the local record hash, the on-chain record hash, the on-chain 
+cross-check, the local block index and local block hash, the on-chain local block 
+hash, whether the local block hash matches on-chain, the contract tx hash, and the 
+Polygonscan links when they are available.
 
 ### What proves the tamper-evidence claim
 

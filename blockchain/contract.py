@@ -65,6 +65,8 @@ def compute_record_hash(
     probe_image_hash: str,
     web_result_count: int,
     schema: str = "v1",
+    *,
+    local_block_hash: str = "",
 ) -> str:
     """
     Return the Keccak-256 record hash.
@@ -73,6 +75,9 @@ def compute_record_hash(
         - is hexadecimal
         - includes the 0x prefix
         - matches the hash stored on-chain by createRecord()
+
+    When ``local_block_hash`` is provided, the record hash also commits to the
+    local ledger block that carried the matching ``contract_tx_hash``.
     """
 
     return "0x" + keccak256_of_json_payload(
@@ -82,6 +87,7 @@ def compute_record_hash(
         probe_image_hash=probe_image_hash,
         web_result_count=web_result_count,
         schema=schema,
+        local_block_hash=local_block_hash,
     ).hex()
 
 
@@ -177,6 +183,8 @@ class ContractBridge:
         result: str,
         probe_image_hash: str,
         web_result_count: int,
+        *,
+        local_block_hash: str = "",
     ) -> str:
         """
         Write a verification record on-chain.
@@ -186,6 +194,10 @@ class ContractBridge:
 
         The transaction is considered successful only after Polygon
         confirms it in a block with receipt status == 1.
+
+        When ``local_block_hash`` is provided, the same canonical payload is
+        used and the printed record summary includes the local block hash so the
+        on-chain record can be tied back to the local ledger.
         """
 
         self._ensure_web3()
@@ -200,6 +212,7 @@ class ContractBridge:
             result=result,
             probe_image_hash=probe_image_hash,
             web_result_count=web_result_count,
+            local_block_hash=local_block_hash,
         )
 
         # ---------------------------------------------------------------------
@@ -223,6 +236,8 @@ class ContractBridge:
         print(f"Similarity Stored: {scaled}")
         print(f"Result           : {result}")
         print(f"Web Results      : {web_result_count}")
+        if local_block_hash:
+            print(f"Local Block Hash : {local_block_hash}")
         print("==========================================")
         print()
 
@@ -230,14 +245,25 @@ class ContractBridge:
         # 4. Prepare Solidity function call
         # ---------------------------------------------------------------------
 
-        func = self._contract.functions.createRecord(
-            subject_id,
-            record_hash,
-            scaled,
-            result,
-            probe_image_hash,
-            web_result_count,
-        )
+        if local_block_hash:
+            func = self._contract.functions.createRecord(
+                subject_id,
+                record_hash,
+                scaled,
+                result,
+                probe_image_hash,
+                web_result_count,
+                local_block_hash,
+            )
+        else:
+            func = self._contract.functions.createRecord(
+                subject_id,
+                record_hash,
+                scaled,
+                result,
+                probe_image_hash,
+                web_result_count,
+            )
 
         # ---------------------------------------------------------------------
         # 5. Build, sign and broadcast transaction
@@ -387,6 +413,54 @@ class ContractBridge:
             return None
 
         return "0x" + raw.hex()
+
+    def get_record_with_local_block_hash(
+        self,
+        subject_id: str,
+    ) -> Optional[tuple[str, str]]:
+        """
+        Return both the on-chain record hash and the attached local block hash.
+
+        Returns:
+            A 2-tuple of (recordHash, localBlockHash), both with 0x prefix, or
+            None if no record exists. ``localBlockHash`` is the zero bytes32 when
+            no local block hash has been attached to this subject's on-chain record.
+        """
+
+        self._ensure_web3()
+
+        try:
+            record_hash, local_block_hash = self._contract.functions.getRecord(
+                subject_id,
+                True,
+            ).call()
+
+        except Exception:
+            return None
+
+        if record_hash == b"\x00" * 32:
+            return None
+
+        return (
+            "0x" + record_hash.hex(),
+            "0x" + local_block_hash.hex(),
+        )
+
+    def get_record_local_block_hash(
+        self,
+        subject_id: str,
+    ) -> Optional[str]:
+        """
+        Legacy single-field accessor for the on-chain local block hash.
+
+        Prefer ``get_record_with_local_block_hash`` when both fields are needed.
+        """
+
+        pair = self.get_record_with_local_block_hash(subject_id)
+        if pair is None:
+            return None
+
+        return pair[1]
 
     def verify_record(
         self,

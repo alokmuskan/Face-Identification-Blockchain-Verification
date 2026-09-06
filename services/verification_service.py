@@ -152,18 +152,30 @@ class VerificationService:
 
         # Optionally write a matching record to the smart contract and store
         # the on-chain tx hash in the local ledger for cross-verification.
+        # The local block is mined first so the on-chain record can reference it.
         contract_tx_hash: Optional[str] = None
+        local_block_hash: Optional[str] = None
         if self.contract_bridge is not None and match['matched']:
             try:
+                # Mine the local block before submitting on-chain so the on-chain
+                # record can reference the exact local block that carries it.
+                tx, block = self.blockchain.record(tx_base)
+                local_block_hash = block.hash
                 contract_tx_hash = self.contract_bridge.submit_record(
                     subject_id=subject_id,
                     similarity=match['similarity'],
                     result=result,
                     probe_image_hash=digest,
                     web_result_count=len(web_results or []),
+                    local_block_hash=local_block_hash,
                 )
                 tx_base['contract_tx_hash'] = contract_tx_hash
                 tx_base['contract_chain'] = 'polygon-amoy'
+                tx_base['local_block_hash'] = local_block_hash
+
+                # Attach the local block hash that the on-chain record references.
+                tx_base['block_index'] = block.index
+                tx_base['block_hash'] = block.hash
             except Exception as exc:
                 logger.warning('On-chain write skipped: %s', exc)
 
@@ -210,6 +222,16 @@ class VerificationService:
         # local_record_hash will differ from the on-chain recordHash and this
         # will return False.
         matched = self.contract_bridge.verify_record(subject_id, local_record_hash)
+        # Optional traceability: read the on-chain local block hash if the
+        # contract supports it and the record has one attached.
+        local_block_hash_on_chain = None
+        try:
+            pair = self.contract_bridge.get_record_with_local_block_hash(subject_id)
+            if pair is not None:
+                _, local_block_hash_on_chain = pair
+        except Exception as exc:
+            logger.debug('Could not read on-chain local block hash: %s', exc)
+
         return {
             'ok': True,
             'subject_id': subject_id,
@@ -218,6 +240,13 @@ class VerificationService:
             'on_chain_match': matched,
             'contract_tx_hash': verif.get('contract_tx_hash'),
             'contract_chain': verif.get('contract_chain', 'polygon-amoy'),
+            'local_block_hash': verif.get('local_block_hash'),
+            'on_chain_local_block_hash': local_block_hash_on_chain,
+            'local_block_index': verif.get('block_index'),
+            'local_block_hash_matches_on_chain': (
+                local_block_hash_on_chain is not None
+                and verif.get('local_block_hash') == local_block_hash_on_chain
+            ),
         }
 
     def history(self, subject_id: str) -> Optional[Dict[str, Any]]:

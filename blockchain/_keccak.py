@@ -68,6 +68,7 @@ _CANONICAL_PAYLOAD_FIELDS = (
     "probe_image_hash",
     "web_result_count",
     "record_schema",
+    "local_block_hash",
     "chain",
 )
 
@@ -80,6 +81,7 @@ def canonical_payload(
     web_result_count: int,
     schema: str = "v1",
     *,
+    local_block_hash: str = "",
     chain: str = "polygon-amoy",
 ) -> dict:
     """Build the canonical record payload dict.
@@ -87,6 +89,9 @@ def canonical_payload(
     This is the single source of truth for the payload shape that is hashed
     on-chain by ``createRecord(...)`` as ``recordHash``. Any change to the
     record shape should happen here only.
+
+    ``local_block_hash`` is optional. When present, it ties the on-chain record
+    to the local ledger block that carried the matching ``contract_tx_hash``.
     """
     return {
         "subject_id": subject_id,
@@ -95,6 +100,7 @@ def canonical_payload(
         "probe_image_hash": probe_image_hash,
         "web_result_count": web_result_count,
         "record_schema": schema,
+        "local_block_hash": local_block_hash,
         "chain": chain,
     }
 
@@ -107,6 +113,7 @@ def canonical_payload_json_bytes(
     web_result_count: int,
     schema: str = "v1",
     *,
+    local_block_hash: str = "",
     chain: str = "polygon-amoy",
 ) -> bytes:
     """Serialize the canonical payload to the exact JSON bytes that are hashed.
@@ -124,6 +131,7 @@ def canonical_payload_json_bytes(
             probe_image_hash=probe_image_hash,
             web_result_count=web_result_count,
             schema=schema,
+            local_block_hash=local_block_hash,
             chain=chain,
         ),
         sort_keys=True,
@@ -140,6 +148,7 @@ def keccak256_of_json_payload(
     web_result_count: int,
     schema: str = "v1",
     *,
+    local_block_hash: str = "",
     chain: str = "polygon-amoy",
 ) -> bytes:
     """Return ``keccak256(canonical_payload_json_bytes(...))``.
@@ -154,5 +163,6 @@ def keccak256_of_json_payload(
         probe_image_hash=probe_image_hash,
         web_result_count=web_result_count,
         schema=schema,
+        local_block_hash=local_block_hash,
         chain=chain,
     ))

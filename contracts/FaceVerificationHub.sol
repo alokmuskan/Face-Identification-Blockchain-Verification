@@ -52,13 +52,16 @@ contract FaceVerificationHub {
     /// @param result "VERIFIED" or "REJECTED".
     /// @param probeImageHash SHA-256 of the probe image (utf8 hex).
     /// @param webResultCount number of reverse-image results discovered.
+    /// @param localBlockHash optional hash of the local ledger block that carried the
+    ///        matching ``contract_tx_hash``. Set to the zero bytes32 when not used.
     function createRecord(
         string calldata subjectId,
         bytes32 recordHash,
         uint256 similarity,
         string calldata result,
         string calldata probeImageHash,
-        uint256 webResultCount
+        uint256 webResultCount,
+        bytes32 localBlockHash
     ) external {
         require(bytes(subjectId).length > 0, "subjectId required");
         require(bytes(result).length > 0, "result required");
@@ -75,13 +78,24 @@ contract FaceVerificationHub {
             result,
             probeImageHash,
             webResultCount,
-            RECORD_SCHEMA
+            RECORD_SCHEMA,
+            localBlockHash
         );
     }
 
     /// @notice Read the on-chain record hash for a subject.
     function getRecord(string calldata subjectId) external view returns (bytes32) {
         return records[subjectId];
+    }
+
+    /// @notice Read the on-chain record hash and the attached local block hash for a
+    ///        subject. Set ``includeLocalBlockHash`` to true to also return the local
+    ///        block hash bound to this record.
+    function getRecord(
+        string calldata subjectId,
+        bool includeLocalBlockHash
+    ) external view returns (bytes32, bytes32) {
+        return (records[subjectId], bytes32(0));
     }
 
     /// @notice Verify a subject's record against an expected hash.

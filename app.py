@@ -125,6 +125,22 @@ def history(subject_id):
     return render_template('history.html', subject=record['subject'], events=record['events'])
 
 
+from config import CONTRACT_ADDRESS
+
+@app.route('/history/<subject_id>/contract')
+def history_contract(subject_id):
+    record = service.history(subject_id)
+    if record is None:
+        abort(404)
+    report = service.verify_contract(subject_id)
+    return render_template(
+        'history_contract.html',
+        subject=record['subject'],
+        report=report,
+        config={'CONTRACT_ADDRESS': CONTRACT_ADDRESS},
+    )
+
+
 @app.route('/web-results/<int:block_index>')
 def web_results(block_index):
     block = service.blockchain.find_block(block_index)

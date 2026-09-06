@@ -348,6 +348,17 @@ adapt:
 
 No wallet private key, signed payload, or biometric image is included in this proof.
 
+If you want a single clean CLI output for the recording, you can also run:
+
+```
+.venv\Scripts\python.exe tools\export_onchain_proof.py --subject-id barack-obama-ee8f7c
+```
+
+That prints the local record hash, on-chain record hash, on-chain cross-check, 
+the local block index and local block hash, the on-chain local block hash, whether 
+the local block hash matches on-chain, the contract tx hash, and the Polygonscan 
+links when they are available.
+
 ---
 
 ## Submission form

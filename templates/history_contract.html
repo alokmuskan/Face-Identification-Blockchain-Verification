@@ -1,0 +1,78 @@
+{% extends 'base.html' %}
+{% block title %}On-chain verification - {{ subject.name }} - Face Chain Verify{% endblock %}
+{% block content %}
+<h1>On-chain verification</h1>
+<p class="muted">Subject ID <code>{{ subject.subject_id }}</code> — live cross-check between the local ledger and the
+deployed smart contract on Polygon Amoy.</p>
+
+<section class="panel">
+  <h2>Latest on-chain record check</h2>
+  {% if report.error %}
+  <div class="alert bad">{{ report.error }}</div>
+  <p class="muted">The on-chain bridge is not configured or no on-chain record exists yet, so this check
+    cannot run live. The local ledger still holds the same event locally.</p>
+  {% else %}
+  <dl class="kv">
+    <dt>Subject ID</dt>
+    <dd><code>{{ report.subject_id }}</code></dd>
+    <dt>Local record hash</dt>
+    <dd><code class="wrap">{{ report.local_record_hash }}</code></dd>
+    <dt>On-chain record hash</dt>
+    <dd><code class="wrap">{{ report.on_chain_record_hash }}</code></dd>
+    <dt>Local &amp; on-chain match</dt>
+    <dd>
+      {% if report.on_chain_match %}
+      <span class="badge ok">True</span>
+      <span class="muted"> — the on-chain record is bound to this exact local payload.</span>
+      {% else %}
+      <span class="badge bad">False</span>
+      {% endif %}
+    </dd>
+    <dt>Local block index</dt>
+    <dd><code>{{ report.local_block_index | default('—') }}</code></dd>
+    <dt>Local block hash</dt>
+    <dd><code class="wrap">{{ report.local_block_hash | default('—') }}</code></dd>
+    <dt>Local block hash (attached to tx)</dt>
+    <dd><code class="wrap">{{ report.local_block_hash | default('—') }}</code></dd>
+    <dt>On-chain local block hash</dt>
+    <dd><code class="wrap">{{ report.on_chain_local_block_hash | default('—') }}</code></dd>
+    <dt>Local block hash matches on-chain</dt>
+    <dd>
+      {% if report.local_block_hash_matches_on_chain is none %}
+      <span class="muted">—</span>
+      {% elif report.local_block_hash_matches_on_chain %}
+      <span class="badge ok">True</span>
+      <span class="muted"> — the on-chain record points back to this exact local block.</span>
+      {% else %}
+      <span class="badge bad">False</span>
+      {% endif %}
+    </dd>
+    <dt>Contract tx hash</dt>
+    <dd><code class="wrap">{{ report.contract_tx_hash or '—' }}</code></dd>
+    <dt>Contract chain</dt>
+    <dd><code>{{ report.contract_chain or 'polygon-amoy' }}</code></dd>
+  </dl>
+  {% if report.contract_tx_hash and config.CONTRACT_ADDRESS %}
+  <a class="btn secondary" href="https://amoy.polygonscan.com/tx/{{ report.contract_tx_hash }}"
+     target="_blank">Open transaction on Polygonscan</a>
+  <a class="btn secondary" href="https://amoy.polygonscan.com/address/{{ config.CONTRACT_ADDRESS }}"
+     target="_blank">Open contract on Polygonscan</a>
+  {% endif %}
+  {% endif %}
+  {% endif %}
+</section>
+
+<section class="panel">
+  <h2>What this proves</h2>
+  <ul>
+    <li>The local record hash is the Keccak-256 of the same canonical JSON payload that was submitted on-chain.</li>
+    <li>The on-chain record hash matches that local payload when the event has not been altered.</li>
+    <li>The local block index and local block hash show exactly which local block carried the matching
+      <code>contract_tx_hash</code>.</li>
+    <li>If the local ledger is tampered with, the recomputed local record hash will no longer match the
+      on-chain record hash.</li>
+  </ul>
+  <p><a class="btn secondary" href="{{ url_for('history', subject_id=subject.subject_id) }}">Back to subject history</a>
+     <a class="btn secondary" href="{{ url_for('ledger') }}">Open the ledger</a></p>
+</section>
+{% endblock %}

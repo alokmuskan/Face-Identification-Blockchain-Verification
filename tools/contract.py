@@ -87,6 +87,19 @@ def _submit(args: argparse.Namespace) -> None:
     print("Polygonscan link: https://amoy.polygonscan.com/tx/" + tx_hash)
     print("Local record hash (keccak256 of payload, should equal on-chain recordHash):")
     print("  ", local_record_hash)
+
+    # Try to include the Phase 3 traceability field when present.
+    local_block_hash_on_chain = None
+    try:
+        pair = bridge.get_record_with_local_block_hash(args.subject_id)
+        if pair is not None:
+            _, local_block_hash_on_chain = pair
+    except Exception:
+        pass
+
+    if local_block_hash_on_chain is not None:
+        print("On-chain local block hash:", local_block_hash_on_chain)
+
     print("On-chain recordHash:")
     on_chain_hash = bridge.get_record_hash(args.subject_id)
     print("  ", on_chain_hash)
