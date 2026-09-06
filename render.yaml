@@ -1,0 +1,38 @@
+# Render Blueprint — one-click deploy of the Face Verification pipeline.
+#
+# Usage: in the Render dashboard, "New +" -> "Blueprint" -> select this repo,
+# and Render reads this file automatically. Or use the button in README.
+#
+# Free-tier notes (docs/DEPLOYMENT.md):
+# - Free web services spin down after 15 minutes without traffic and take
+#   ~30-60 s to wake up on the next request.
+# - The disk is ephemeral: data/ (ledger, face store) resets on every
+#   restart, which is why the container seeds itself on boot (SEED_DEMO=1).
+# - 512 MB RAM: single gunicorn worker (GUNICORN_WORKERS=1) because each
+#   OpenCV worker would load its own model copies.
+
+services:
+  - type: web
+    name: face-chain-verify
+    runtime: docker
+    plan: free
+    autoDeploy: true
+    healthCheckPath: /health
+    envVars:
+      - key: FLASK_ENV
+        value: production
+      - key: SEED_DEMO
+        value: "1"
+      - key: GUNICORN_WORKERS
+        value: "1"
+      # Optional on-chain bridge. Leave WEB3_RPC_URL empty to run with the
+      # local ledger only; on-chain writes are then skipped with a clear
+      # reason instead of failing. NEVER put a mainnet key here.
+      - key: WEB3_RPC_URL
+        sync: false
+      - key: CONTRACT_ADDRESS
+        value: 0x7fc71404Ce10f84B5C467AB3c9806507D422fEf4
+      - key: PRIVATE_KEY
+        sync: false
+      - key: CHAIN_ID
+        value: "80002"

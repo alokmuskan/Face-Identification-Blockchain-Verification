@@ -1,9 +1,8 @@
-Flask web framework
+flask>=3.0
 opencv-contrib-python>=4.10
 numpy>=1.26
 Pillow>=10.0
 pytest>=8.0
-playwright>=1.40
 selenium>=4.6
 
 # Optional: on-chain bridge to Polygon Amoy (FaceVerificationHub).

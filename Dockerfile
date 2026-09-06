@@ -58,8 +58,17 @@ RUN python tools/fetch_models.py || true
 # Runtime data (git-ignored in the repo, but needed by the app).
 RUN mkdir -p data/faces data/probes data/webcache
 
+# Seed a fresh data dir on boot (registers the bundled demo subject and
+# mines a demo block) so an ephemeral deploy is demo-ready immediately.
+# Set SEED_DEMO=0 to disable.
+ENV SEED_DEMO=1
+
 EXPOSE 5000
 
-# gunicorn with a longer timeout because the reverse image search can take
-# 30-60 seconds per request.
-CMD ["gunicorn", "--bind", "0.0.0.0:5000", "--workers", "2", "--timeout", "120", "app:app"]
+# gunicorn with a long timeout because the reverse image search can take
+# 30-60 seconds per request. Single worker by default: the free tiers of
+# PaaS platforms (Render ~512MB) are memory-constrained and each OpenCV
+# worker loads its own model copies. Override via GUNICORN_WORKERS.
+# The bind port honors $PORT, which Render injects at runtime.
+ENV GUNICORN_WORKERS=1
+CMD ["sh", "-c", "if [ \"$SEED_DEMO\" = \"1\" ]; then python tools/seed_demo.py || true; fi; exec gunicorn --bind 0.0.0.0:${PORT:-5000} --workers ${GUNICORN_WORKERS} --timeout 120 --threads 4 app:app"]

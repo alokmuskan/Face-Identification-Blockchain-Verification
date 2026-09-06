@@ -74,26 +74,42 @@ docker run -p 5000:5000 -e FLASK_ENV=production face-verify
 
 Then open `http://localhost:5000`.
 
-### Deploy to Render
+### Deploy to Render (free tier works)
 
-1. Push your code to GitHub
-2. Go to https://render.com
-3. New Web Service → connect your repo
-4. Build command: `docker build -t face-verify .` (or use Dockerfile)
-5. Start command: `docker run -p 5000:5000 face-verify`
-6. Add environment variables in Render dashboard:
-   - `FLASK_ENV=production`
-   - Any blockchain env vars if using smart contract
+The repo includes a **Render Blueprint** (`render.yaml`) and a **seed script**
+(`tools/seed_demo.py`) so a fresh deploy is demo-ready in one click:
 
-**Problem**: Render's free tier may not have enough resources for Chrome + Selenium + ONNX models. The app might be slow or fail.
+1. Push your code to GitHub (the `main` branch)
+2. Go to https://dashboard.render.com → **New +** → **Blueprint**
+3. Select this repository — Render reads `render.yaml` automatically
+4. Add these environment variables when prompted (all optional):
+   - `WEB3_RPC_URL`, `CONTRACT_ADDRESS`, `PRIVATE_KEY` — enables live on-chain
+     writes (use a **testnet-only** key; POL for gas comes from the faucet)
+   - Leave them unset for local-ledger-only operation (still fully demonstrable)
+5. Click **Apply** — the first build takes ~8–12 min (Chrome + ONNX models)
+6. Render assigns a URL like `https://face-chain-verify.onrender.com`
+
+**Free-tier facts (verified):**
+- 512 MB RAM — the Dockerfile is tuned for this (gunicorn with 1 worker;
+  Chrome + ONNX fit but leave little headroom)
+- **Ephemeral disk** — the ledger/faces reset on every restart or sleep.
+  The seed script runs at container start (`SEED_DEMO=1`) and re-registers the
+  bundled Obama probe + a demo block, so `/demo` always works
+- **Spins down after ~15 min idle** — the next request takes ~50s to wake
+- Free instances do **not** have outbound-port restrictions, so Yandex works
+
+**One caveat for judges testing live:** headless-Chrome reverse search may be
+bot-flagged from datacenter IPs more often than from your home machine. If the
+web-search step returns 0 results on the live URL, the local ledger + on-chain
+record still work, and the recording (made locally) shows the search working.
 
 ### Deploy to Railway
 
 1. Go to https://railway.app
 2. New Project → Deploy from GitHub repo
-3. Railway auto-detects Dockerfiles
-4. Add environment variables
-5. Railway has more compute resources than Render free tier — better chance of Chrome working
+3. Railway auto-detects the Dockerfile
+4. Add environment variables (same list as Render)
+5. Set `SEED_DEMO=1` so the demo probe is registered on boot
 
 ### Deploy to a VPS (most reliable)
 
