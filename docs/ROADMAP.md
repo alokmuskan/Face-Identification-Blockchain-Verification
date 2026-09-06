@@ -323,9 +323,28 @@ To verify a past verification:
 
 ---
 
-## Phase 4: Deployment (2-5 days)
+## Phase 4: Richer Local Record + UI (implemented ✅)
 
-Make the project **live and accessible**.
+> Phase 4 was redefined with the approved decision: keep the deployed
+> `FaceVerificationHub` and the canonical record hash unchanged, and improve the
+> application around them. Full scope: `docs/phase4-roadmap.md`.
+
+**Done and verified:**
+- [x] Richer local verification records (probe/embedding hashes, block + tx
+      linkage, verdict metadata)
+- [x] Fixed `verify_contract()` cross-check (`local_block_hash` participates in
+      the canonical record hash)
+- [x] Cleaned history + on-chain verification UI
+- [x] `tests/test_phase4.py` + `/health` route test (26/26 passing)
+- [x] Deployment scaffolding: `Dockerfile`, `.dockerignore`, `.env.example`,
+      env-configurable `HOST`/`PORT`/`FLASK_DEBUG`
+
+---
+
+## Phase 5: Deployment (optional bonus, 1-2 days)
+
+Make the project **live and accessible**. Not required for the submission (the
+task says no live working link needed), but impressive for reviewers.
 
 ### 4.1 Backend deployment
 
@@ -391,7 +410,7 @@ PORT=5000
 
 ---
 
-## Phase 5: Polish & Presentation (ongoing)
+## Phase 6: Polish & Presentation (ongoing)
 
 Things that make the project feel finished and professional.
 
@@ -436,7 +455,7 @@ Use Flask-RESTX or just a well-formatted Markdown page at `/api/docs` showing:
 
 ---
 
-## Phase 6: Advanced Features (stretch goals, post-shortlist)
+## Phase 7: Advanced Features (stretch goals, post-shortlist)
 
 ### 6.1 Multiple face detection engines
 - Allow switching between YuNet, SSD, MTCNN, etc.
@@ -481,10 +500,11 @@ Use Flask-RESTX or just a well-formatted Markdown page at `/api/docs` showing:
 | 2.1 | Polygon smart contract | 3-5 days | VERY HIGH | If shortlisted, before final round |
 | 2.4 | Show Polygonscan verification | 1 day | VERY HIGH | With 2.1 |
 | 3.1-3.5 | Full on-chain architecture | 3-5 days | HIGH | After shortlist |
-| 4.1-4.4 | Deployment | 2-3 days | HIGH | After shortlist |
-| 5.1 | Better README | 1 day | Medium | Anytime |
-| 5.2 | /demo route | 1 day | Medium | Anytime |
-| 6.x | Stretch goals | varies | Low-Med | Post-shortlist |
+| 4.x | Richer local record + UI | done | HIGH | Completed ✅ |
+| 5.1-5.4 | Deployment (Docker/PaaS) | 1-2 days | Medium | Optional bonus |
+| 6.1 | Better README | 1 day | Medium | Anytime |
+| 6.2 | /demo route | 1 day | Medium | Anytime |
+| 7.x | Stretch goals | varies | Low-Med | Post-shortlist |
 
 ---
 
