@@ -8,9 +8,10 @@
 # Keep real private keys and funded wallet addresses out of version control.
 from __future__ import annotations
 
+import json
 import logging
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any, Optional
 
 from ._keccak import canonical_payload_json_bytes, keccak256, keccak256_hex, keccak256_of_json_payload
 
@@ -179,7 +180,11 @@ class ContractBridge:
         here, because the on-chain value is also the keccak256 of the payload.
         """
         self._ensure_web3()
-        expected_bytes32 = Web3.to_bytes(hexstr=expected_hash_utf8) if expected_hash_utf8 else b"\x00" * 32
+        expected_bytes32 = (
+            self._w3.to_bytes(hexstr=expected_hash_utf8)
+            if expected_hash_utf8
+            else b"\x00" * 32
+        )
         try:
             return bool(self._contract.functions.verifyRecord(subject_id, expected_bytes32).call())
         except Exception:
