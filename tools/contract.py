@@ -49,7 +49,7 @@ CONTRACT_ADDRESS = ""
 PRIVATE_KEY = ""
 
 # Polygon Amoy chain id.
-CHAIN_ID = 80143
+CHAIN_ID = 80002
 """
 
 
@@ -65,7 +65,7 @@ def _submit(args: argparse.Namespace) -> None:
         rpc_url=config_chain.POLY_AMOY_RPC,
         contract_address=config_chain.CONTRACT_ADDRESS,
         private_key=config_chain.PRIVATE_KEY,
-        chain_id=getattr(config_chain, "CHAIN_ID", 80143),
+        chain_id=getattr(config_chain, "CHAIN_ID", 80002),
     )
     tx_hash = bridge.submit_record(
         subject_id=args.subject_id,
@@ -101,7 +101,7 @@ def _verify(args: argparse.Namespace) -> None:
         rpc_url=config_chain.POLY_AMOY_RPC,
         contract_address=config_chain.CONTRACT_ADDRESS,
         private_key=config_chain.PRIVATE_KEY,
-        chain_id=getattr(config_chain, "CHAIN_ID", 80143),
+        chain_id=getattr(config_chain, "CHAIN_ID", 80002),
     )
     on_chain = bridge.get_record_hash(args.subject_id)
     if on_chain is None:

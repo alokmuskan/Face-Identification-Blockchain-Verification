@@ -44,7 +44,7 @@ class VerificationService:
         address = getattr(cc, 'CONTRACT_ADDRESS', None)
         private_key = getattr(cc, 'PRIVATE_KEY', None)
         rpc = getattr(cc, 'POLY_AMOY_RPC', None)
-        chain_id = getattr(cc, 'CHAIN_ID', 80143)
+        chain_id = getattr(cc, 'CHAIN_ID', 80002)
         if not address or not private_key or not rpc:
             logger.info('On-chain bridge disabled: config_chain missing values.')
             return

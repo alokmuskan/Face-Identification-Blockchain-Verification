@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import json
 import logging
+import threading
 from pathlib import Path
 from typing import Any, Optional
 
@@ -73,7 +74,7 @@ class ContractBridge:
         rpc_url: str,
         contract_address: str,
         private_key: str,
-        chain_id: int = 80143,
+        chain_id: int = 80002,
     ) -> None:
         self._rpc_url = rpc_url
         self._contract_address = contract_address
@@ -82,6 +83,7 @@ class ContractBridge:
         self._w3: Any = None
         self._account: Any = None
         self._contract: Any = None
+        self._tx_lock = threading.Lock()
 
     def _ensure_web3(self) -> None:
         """Lazy-import web3 and bind the contract on first RPC use."""
@@ -89,7 +91,7 @@ class ContractBridge:
             return
         try:
             from web3 import Web3  # type: ignore[import]
-            from web3.eth import Account  # type: ignore[import]
+            from eth_account import Account  # type: ignore[import]
         except Exception as exc:
             raise RuntimeError(
                 "web3 is required for on-chain operations. Install it with: "
@@ -121,8 +123,14 @@ class ContractBridge:
         probe_image_hash: str,
         web_result_count: int,
     ) -> str:
-        """Write a record on-chain and return the tx hash (utf8 hex)."""
+        """Write a verification record on-chain and return its transaction hash.
+
+        The transaction is considered successful only after Polygon confirms it
+        in a block with a receipt status of 1.
+        """
         self._ensure_web3()
+
+        # Build the exact canonical payload used to generate the record hash.
         payload_bytes = canonical_payload_json_bytes(
             subject_id=subject_id,
             similarity=similarity,
@@ -130,34 +138,73 @@ class ContractBridge:
             probe_image_hash=probe_image_hash,
             web_result_count=web_result_count,
         )
+
         record_hash = keccak256(payload_bytes)
         scaled = _scaled_similarity(similarity)
 
+        # Prepare the Solidity function call.
         func = self._contract.functions.createRecord(
-            subject_id=subject_id,
-            recordHash=record_hash,
-            similarity=scaled,
-            result=result,
-            probeImageHash=probe_image_hash,
-            webResultCount=web_result_count,
+            subject_id,
+            record_hash,
+            scaled,
+            result,
+            probe_image_hash,
+            web_result_count,
         )
+
+        # Build the transaction.
         tx = func.build_transaction(
             {
                 "chainId": self._w3.eth.chain_id,
                 "gas": 300_000,
                 "gasPrice": self._w3.eth.gas_price,
-                "nonce": self._w3.eth.get_transaction_count(self._account.address),
+                "nonce": self._w3.eth.get_transaction_count(
+                        self._account.address,
+                        "pending"
+                    ),
                 "from": self._account.address,
             }
         )
+
+        # Sign the transaction locally.
         signed = self._account.sign_transaction(tx)
-        tx_hash = self._w3.eth.send_raw_transaction(signed.raw_transaction)
+
+        # Broadcast the signed transaction to Polygon Amoy.
+        tx_hash = self._w3.eth.send_raw_transaction(
+            signed.raw_transaction
+        )
+
+        tx_hash_hex = tx_hash.hex()
+
         logger.info(
             "On-chain record submitted: subject=%s tx=%s",
             subject_id,
-            tx_hash.hex(),
+            tx_hash_hex,
         )
-        return tx_hash.hex()
+
+        # Wait until the transaction is mined.
+        receipt = self._w3.eth.wait_for_transaction_receipt(
+            tx_hash,
+            timeout=120,
+            poll_latency=0.5,
+        )
+
+        # A receipt status of 0 means the transaction reverted.
+        if receipt["status"] != 1:
+            raise RuntimeError(
+                f"On-chain record transaction reverted: "
+                f"subject={subject_id}, tx={tx_hash_hex}"
+            )
+
+        logger.info(
+            "On-chain record confirmed: subject=%s tx=%s block=%s gas_used=%s",
+            subject_id,
+            tx_hash_hex,
+            receipt["blockNumber"],
+            receipt["gasUsed"],
+        )
+
+        return tx_hash_hex
 
     # -- queries --------------------------------------------------------------
 
@@ -173,31 +220,74 @@ class ContractBridge:
         return "0x" + raw.hex()
 
     def verify_record(self, subject_id: str, expected_hash_utf8: str) -> bool:
-        """Return True when the on-chain ``recordHash`` matches *expected_hash_utf8*.
+        """Return True when the on-chain record hash matches the expected hash.
 
-        *expected_hash_utf8* should already be the keccak256 hex of the canonical
-        payload (as returned by ``compute_record_hash(...)``). It is **not** re-hashed
-        here, because the on-chain value is also the keccak256 of the payload.
+        Args:
+            subject_id: Subject identifier used when the record was created.
+            expected_hash_utf8: Keccak-256 hash in hexadecimal form, with or
+                without the ``0x`` prefix.
+
+        Returns:
+            True if the expected hash matches the hash stored on-chain.
+
+        Raises:
+            ValueError: If the supplied hash is not exactly 32 bytes.
+            RuntimeError: If the blockchain/RPC call fails.
         """
         self._ensure_web3()
-        expected_bytes32 = (
-            self._w3.to_bytes(hexstr=expected_hash_utf8)
-            if expected_hash_utf8
-            else b"\x00" * 32
-        )
+
+        if not expected_hash_utf8:
+            raise ValueError("expected_hash_utf8 is required")
+
+        # Remove the optional 0x prefix and convert the hexadecimal hash
+        # into the 32-byte value expected by the Solidity bytes32 parameter.
+        hash_hex = expected_hash_utf8.removeprefix("0x")
+
         try:
-            return bool(self._contract.functions.verifyRecord(subject_id, expected_bytes32).call())
-        except Exception:
-            return False
+            expected_bytes32 = bytes.fromhex(hash_hex)
+        except ValueError as exc:
+            raise ValueError(
+                "expected_hash_utf8 must be a valid hexadecimal hash"
+            ) from exc
+
+        if len(expected_bytes32) != 32:
+            raise ValueError(
+                f"expected_hash_utf8 must represent exactly 32 bytes; "
+                f"got {len(expected_bytes32)} bytes"
+            )
+
+        try:
+            return bool(
+                self._contract.functions.verifyRecord(
+                    subject_id,
+                    expected_bytes32,
+                ).call()
+            )
+        except Exception as exc:
+            raise RuntimeError(
+                f"Failed to verify record for subject '{subject_id}'"
+            ) from exc
 
     def record_count(self) -> int:
+        """Return the total number of records created on-chain."""
         self._ensure_web3()
-        return int(self._contract.functions.recordCount().call())
+
+        return int(
+            self._contract.functions.recordCount().call()
+        )
 
     def last_record_at(self) -> int:
+        """Return the Unix timestamp of the most recently created record."""
         self._ensure_web3()
-        return int(self._contract.functions.lastRecordAt().call())
+
+        return int(
+            self._contract.functions.lastRecordAt().call()
+        )
 
     def last_record_by(self) -> str:
+        """Return the address that created the most recent record."""
         self._ensure_web3()
+
         return self._contract.functions.lastRecordBy().call()
+
+

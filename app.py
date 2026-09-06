@@ -15,6 +15,7 @@ ensure_dirs()
 
 app = Flask(__name__)
 app.config['MAX_CONTENT_LENGTH'] = MAX_IMAGE_BYTES
+app.config['MAX_FORM_MEMORY_SIZE'] = 5 * 1024 * 1024
 service = VerificationService()
 
 

@@ -12,4 +12,4 @@ CONTRACT_ADDRESS = ""
 PRIVATE_KEY = ""
 
 # Polygon Amoy chain id.
-CHAIN_ID = 80143
+CHAIN_ID = 80002
