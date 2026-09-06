@@ -141,6 +141,20 @@ def test_resolve_chain_config_env_fallback(monkeypatch):
     }
 
 
+def test_deployed_contract_supports_local_block_hash_detection():
+    """Feature detection must flag old deployments that lack the 7-arg overload."""
+    from blockchain.contract import deployed_contract_supports_local_block_hash
+    from eth_utils import keccak
+
+    sel = bytes(keccak(
+        text='createRecord(string,bytes32,uint256,string,string,uint256,bytes32)'
+    )[:4])
+    bytecode_with = b'\x00' + sel + b'\xff' * 8
+    bytecode_without = b'\x00' + bytes(keccak(text='totally-other-func()')[:4]) + b'\xff' * 8
+    assert deployed_contract_supports_local_block_hash(bytecode_with) is True
+    assert deployed_contract_supports_local_block_hash(bytecode_without) is False
+
+
 def test_resolve_chain_config_returns_none_when_unset(monkeypatch):
     import sys
     from services.verification_service import resolve_chain_config
