@@ -146,6 +146,7 @@ class VerificationService:
             'similarity': match['similarity'],
             'threshold': match['threshold'],
             'probe_image_hash': digest,
+            'embedding_hash': hashlib.sha256(embedding.tobytes()).hexdigest(),
             'web_search_results': [r.to_dict() for r in (web_results or [])],
             'web_search_count': len(web_results or []),
         }
@@ -172,10 +173,15 @@ class VerificationService:
                 tx_base['contract_tx_hash'] = contract_tx_hash
                 tx_base['contract_chain'] = 'polygon-amoy'
                 tx_base['local_block_hash'] = local_block_hash
-
-                # Attach the local block hash that the on-chain record references.
                 tx_base['block_index'] = block.index
                 tx_base['block_hash'] = block.hash
+                tx_base['verification_time'] = block.timestamp
+                tx_base['result_metadata'] = {
+                    'verdict': result,
+                    'similarity': match['similarity'],
+                    'threshold': match['threshold'],
+                    'matched': match['matched'],
+                }
             except Exception as exc:
                 logger.warning('On-chain write skipped: %s', exc)
 
@@ -187,6 +193,34 @@ class VerificationService:
             'transaction': tx,
             'block': block.to_dict(),
             'probe_path': stored_path,
+        }
+
+    # -- richer local verification record -------------------------------------
+
+    def build_verification_record(self, tx: Dict[str, Any]) -> Dict[str, Any]:
+        """Build a UI-friendly local verification record from a ledger transaction.
+
+        This keeps the richer display metadata local while the on-chain record
+        remains the immutable public proof.
+        """
+        return {
+            'subject_id': tx.get('subject_id'),
+            'subject_name': tx.get('subject_name'),
+            'result': tx.get('result'),
+            'similarity': tx.get('similarity'),
+            'threshold': tx.get('threshold'),
+            'matched': tx.get('matched'),
+            'probe_image_hash': tx.get('probe_image_hash'),
+            'embedding_hash': tx.get('embedding_hash'),
+            'web_search_results': tx.get('web_search_results', []),
+            'web_search_count': tx.get('web_search_count', 0),
+            'block_index': tx.get('block_index'),
+            'block_hash': tx.get('block_hash'),
+            'block_time': tx.get('block_time'),
+            'contract_tx_hash': tx.get('contract_tx_hash'),
+            'contract_chain': tx.get('contract_chain', 'polygon-amoy'),
+            'local_block_hash': tx.get('local_block_hash'),
+            'result_metadata': tx.get('result_metadata'),
         }
 
     # -- pass-through queries ----------------------------------------------
@@ -209,12 +243,15 @@ class VerificationService:
             return {'ok': False, 'error': 'No local FACE_VERIFICATION record for this subject.'}
         # compute_record_hash is the single source of truth for the canonical
         # payload + its keccak256 hash. Don't reconstruct the payload bytes here.
+        # The local_block_hash must be passed through so the recomputed hash
+        # matches what submit_record() committed on-chain for enriched records.
         local_record_hash = compute_record_hash(
             subject_id=verif.get('subject_id', subject_id),
             similarity=verif.get('similarity', 0.0),
             result=verif.get('result', ''),
             probe_image_hash=verif.get('probe_image_hash', ''),
             web_result_count=verif.get('web_search_count', 0),
+            local_block_hash=verif.get('local_block_hash') or '',
         )
         on_chain_hash = self.contract_bridge.get_record_hash(subject_id)
         # Compare the LOCAL payload hash against the on-chain record hash.
@@ -247,6 +284,7 @@ class VerificationService:
                 local_block_hash_on_chain is not None
                 and verif.get('local_block_hash') == local_block_hash_on_chain
             ),
+            'local_verification_record': self.build_verification_record(verif),
         }
 
     def history(self, subject_id: str) -> Optional[Dict[str, Any]]:

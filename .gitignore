@@ -22,6 +22,11 @@ models/
 # Local on-chain bridge config (contains funded wallet private key)
 config_chain.py
 
+# Environment files (secrets)
+.env
+.env.*
+!.env.example
+
 # VS Code / MCP local config
 .vscode/
 .mcp.json
