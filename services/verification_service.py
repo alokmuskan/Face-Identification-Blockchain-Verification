@@ -222,7 +222,7 @@ class VerificationService:
         return {
             'ok': True,
             'subject_id': subject_id,
-            'local_payload_sha256': local_record_hash,
+            'local_record_hash': local_record_hash,
             'on_chain_record_hash': on_chain_hash,
             'on_chain_match': matched,
             'contract_tx_hash': verif.get('contract_tx_hash'),
