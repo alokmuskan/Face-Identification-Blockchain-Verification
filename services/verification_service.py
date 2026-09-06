@@ -271,12 +271,20 @@ class VerificationService:
         if self.contract_bridge is None:
             return {'ok': False, 'error': 'On-chain bridge is not configured.'}
         # Find the latest local FACE_VERIFICATION payload for this subject.
+        # Prefer the latest event that actually carries a contract_tx_hash so
+        # the report references the transaction that created the on-chain
+        # record; bridge-off runs (no tx) must not shadow it.
         events = self.blockchain.transactions_for_subject(subject_id)
         verif = None
         for ev in reversed(events):
-            if ev.get('type') == 'FACE_VERIFICATION':
+            if ev.get('type') == 'FACE_VERIFICATION' and ev.get('contract_tx_hash'):
                 verif = ev
                 break
+        if verif is None:
+            for ev in reversed(events):
+                if ev.get('type') == 'FACE_VERIFICATION':
+                    verif = ev
+                    break
         if verif is None:
             return {'ok': False, 'error': 'No local FACE_VERIFICATION record for this subject.'}
         # compute_record_hash is the single source of truth for the canonical
