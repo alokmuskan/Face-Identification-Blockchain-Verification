@@ -91,15 +91,21 @@
     }
 
     var tx = data.transaction || {};
-    if (tx.contract_tx_hash) {
+    var txHash = tx.contract_tx_hash || data.contract_tx_hash;
+    if (txHash) {
       html += '<h3>On-chain record</h3><dl class="kv">' +
-        '<dt>Contract tx hash</dt><dd><code class="wrap">' + esc(tx.contract_tx_hash) + '</code></dd>' +
-        '<dt>Contract chain</dt><dd><code>' + esc(tx.contract_chain || 'polygon-amoy') + '</code></dd>' +
+        '<dt>Contract tx hash</dt><dd><code class="wrap">' + esc(txHash) + '</code></dd>' +
+        '<dt>Contract chain</dt><dd><code>' + esc(tx.contract_chain || data.contract_chain || 'polygon-amoy') + '</code></dd>' +
         '<dt>Local block hash (traceability)</dt><dd><code class="wrap">' + esc(tx.local_block_hash || '—') + '</code></dd>' +
         '</dl>' +
-        '<p><a class="btn secondary" href="https://amoy.polygonscan.com/tx/' + esc(tx.contract_tx_hash) + '" target="_blank">Open on Polygonscan</a></p>';
+        '<p><a class="btn secondary" href="https://amoy.polygonscan.com/tx/' + esc(txHash) + '" target="_blank">Open on Polygonscan</a></p>';
+    } else if (data.on_chain_error) {
+      html += '<div class="alert bad"><strong>On-chain write failed:</strong> ' + esc(data.on_chain_error) + '</div>' +
+              '<p class="muted">The local ledger still holds the event.</p>';
+    } else if (data.on_chain_skipped_reason) {
+      html += '<p class="muted">On-chain write skipped: ' + esc(data.on_chain_skipped_reason) + ' The local ledger still holds the event.</p>';
     } else {
-      html += '<p class="muted">No on-chain write in this run (bridge not configured or record not submitted). The local ledger still holds the event.</p>';
+      html += '<p class="muted">No on-chain write in this run. The local ledger still holds the event.</p>';
     }
     html += '<p><a class="btn secondary" href="' + window.location.pathname + '">Run again</a></p>';
     body.innerHTML = html;

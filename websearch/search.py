@@ -173,45 +173,61 @@ class WebSearchEngine:
             tmp.write(image_bytes)
             tmp_path = tmp.name
 
+        # Try the full upload flow twice: Yandex occasionally serves a captcha
+        # or a slow page on the first load, and a second attempt usually goes
+        # through.
+        attempts = 2
+        for attempt in range(1, attempts + 1):
+            try:
+                driver.get('https://yandex.com/images/')
+
+                # Click the camera / reverse-image search button.
+                self._click_search_by_image(driver)
+
+                # Upload the file once the file chooser input is visible.
+                file_input = self._wait_for_file_input(driver)
+                if file_input is None:
+                    logger.warning(
+                        'Yandex did not show a file input for image upload (attempt %d/%d).',
+                        attempt, attempts,
+                    )
+                    continue
+
+                file_input.send_keys(tmp_path)
+
+                # Wait for result cards or at least some content to appear.
+                wait = WebDriverWait(driver, self.timeout)
+                try:
+                    wait.until(
+                        lambda d: len(d.find_elements(By.CSS_SELECTOR, 'div.serp-item,'
+                                                       'div.CompactView,'
+                                                       'div[style*="background-image"],'
+                                                       'a[href*="yandex"]')) > 0,
+                        'Results did not appear within the timeout.',
+                    )
+                except Exception:
+                    # Even without detected cards, try to extract whatever is there.
+                    pass
+
+                results = self._extract_results(driver)
+            except Exception as exc:
+                logger.warning('Reverse image search failed (attempt %d/%d): %s',
+                               attempt, attempts, exc)
+
+            if results:
+                break
+            if attempt < attempts:
+                time.sleep(2)
+
         try:
-            driver.get('https://yandex.com/images/')
+            Path(tmp_path).unlink(missing_ok=True)
+        except OSError:
+            pass
 
-            # Click the camera / reverse-image search button.
-            self._click_search_by_image(driver)
-
-            # Upload the file once the file chooser input is visible.
-            file_input = self._wait_for_file_input(driver)
-            if file_input is None:
-                logger.warning('Yandex did not show a file input for image upload.')
-                return []
-
-            file_input.send_keys(tmp_path)
-
-            # Wait for result cards or at least some content to appear.
-            wait = WebDriverWait(driver, self.timeout)
-            try:
-                wait.until(
-                    lambda d: len(d.find_elements(By.CSS_SELECTOR, 'div.serp-item,'
-                                                   'div.CompactView,'
-                                                   'div[style*="background-image"],'
-                                                   'a[href*="yandex"]')) > 0,
-                    'Results did not appear within the timeout.',
-                )
-            except Exception:
-                # Even without detected cards, try to extract whatever is there.
-                pass
-
-            results = self._extract_results(driver)
-        except Exception as exc:
-            logger.warning('Reverse image search failed: %s', exc)
-        finally:
-            try:
-                Path(tmp_path).unlink(missing_ok=True)
-            except OSError:
-                pass
-
-        # Persist results to disk so subsequent identical probes skip the browser.
-        if self._cache_dir is not None:
+        # Persist only non-empty results so a transient failure (captcha, slow
+        # page, UI change) is retried on the next run instead of being served
+        # from cache for the whole TTL.
+        if self._cache_dir is not None and results:
             try:
                 self._save_cache(digest, results)
             except Exception:

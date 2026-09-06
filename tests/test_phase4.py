@@ -122,6 +122,33 @@ def test_verify_contract_without_bridge_reports_unconfigured():
         service.contract_bridge = original
 
 
+def test_resolve_chain_config_env_fallback(monkeypatch):
+    """Env vars must fill in when config_chain.py is absent/empty."""
+    import sys
+    from services.verification_service import resolve_chain_config
+    monkeypatch.setitem(sys.modules, 'config_chain', None)  # force import failure
+    monkeypatch.setattr('services.verification_service.os.environ', {
+        'WEB3_RPC_URL': 'https://rpc.example',
+        'CONTRACT_ADDRESS': '0x' + 'ab' * 20,
+        'PRIVATE_KEY': '0x' + 'cd' * 32,
+    })
+    cfg = resolve_chain_config()
+    assert cfg == {
+        'rpc_url': 'https://rpc.example',
+        'contract_address': '0x' + 'ab' * 20,
+        'private_key': '0x' + 'cd' * 32,
+        'chain_id': 80002,
+    }
+
+
+def test_resolve_chain_config_returns_none_when_unset(monkeypatch):
+    import sys
+    from services.verification_service import resolve_chain_config
+    monkeypatch.setitem(sys.modules, 'config_chain', None)
+    monkeypatch.setattr('services.verification_service.os.environ', {})
+    assert resolve_chain_config() is None
+
+
 class _FakeBridge:
     """Records calls instead of touching the network."""
 
