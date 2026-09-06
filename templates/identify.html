@@ -5,9 +5,14 @@
 <p class='muted'>Submit a probe photo. The system matches it against enrolled subjects, records the outcome on the blockchain and returns the verdict.</p>
 
 <section class='panel'>
-  <form method='post' enctype='multipart/form-data' class='stack'>
+  <form method='post' enctype='multipart/form-data' class='stack' id='identify-form'>
     {% include '_capture.html' %}
-    <button type='submit' class='btn primary'>Identify and record</button>
+    <button type='submit' class='btn primary' id='identify-btn'>Identify and record</button>
+    <p class='muted' id='identify-progress' hidden>
+      <span class='spinner'></span>
+      <span id='identify-stage'>Matching face against enrolled subjects…</span>
+      The reverse image search can take up to ~45 seconds. Do not close this page.
+    </p>
   </form>
 </section>
 
@@ -75,4 +80,32 @@
 </section>
 {% endif %}
 {% endblock %}
-{% block scripts %}<script src='{{ url_for('static', filename='capture.js') }}'></script>{% endblock %}
+{% block scripts %}
+<script src='{{ url_for('static', filename='capture.js') }}'></script>
+<script>
+(function () {
+  var form = document.getElementById('identify-form');
+  if (!form) return;
+  var btn = document.getElementById('identify-btn');
+  var progress = document.getElementById('identify-progress');
+  var stage = document.getElementById('identify-stage');
+  form.addEventListener('submit', function () {
+    if (btn) { btn.disabled = true; btn.textContent = 'Running pipeline…'; }
+    if (progress) progress.hidden = false;
+    // Advance the status line while the request is in flight.
+    var stages = [
+      'Matching face against enrolled subjects…',
+      'Face matched — running reverse image search (up to ~45s)…',
+      'Search finished — mining the local block…',
+      'Submitting the record on-chain…'
+    ];
+    var i = 0;
+    if (window.__identifyStageTimer) clearInterval(window.__identifyStageTimer);
+    window.__identifyStageTimer = setInterval(function () {
+      i = Math.min(i + 1, stages.length - 1);
+      if (stage) stage.textContent = stages[i];
+    }, 6000);
+  });
+})();
+</script>
+{% endblock %}

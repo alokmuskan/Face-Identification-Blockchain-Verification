@@ -272,5 +272,85 @@ def api_history_contract(subject_id):
     return jsonify({'ok': True, **service.verify_contract(subject_id)})
 
 
+API_REFERENCE = [
+    {
+        'group': 'Health & status',
+        'endpoints': [
+            {'method': 'GET', 'path': '/health',
+             'desc': 'Liveness probe with model and chain stats. Returns 503 when models are missing.',
+             'example': 'curl http://127.0.0.1:5000/health'},
+            {'method': 'GET', 'path': '/api/status',
+             'desc': 'Models, subject count, and ledger stats.',
+             'example': 'curl http://127.0.0.1:5000/api/status'},
+        ],
+    },
+    {
+        'group': 'Pipeline',
+        'endpoints': [
+            {'method': 'POST', 'path': '/api/register',
+             'desc': 'Enroll a face. multipart field image, or form field image_data (base64 data URL).',
+             'example': "curl -F 'name=Barack Obama' -F 'image=@face.jpg' http://127.0.0.1:5000/api/register"},
+            {'method': 'POST', 'path': '/api/identify',
+             'desc': 'Identify a probe: face match → reverse image search → local ledger + optional on-chain record.',
+             'example': "curl -F 'image=@probe.jpg' http://127.0.0.1:5000/api/identify"},
+            {'method': 'POST', 'path': '/demo/run',
+             'desc': 'Run the full pipeline on a stored sample probe (form field: sample). Used by the /demo page.',
+             'example': "curl -X POST -F 'sample=obama-probe.jpg' http://127.0.0.1:5000/demo/run"},
+        ],
+    },
+    {
+        'group': 'Ledger',
+        'endpoints': [
+            {'method': 'GET', 'path': '/api/chain',
+             'desc': 'Full local chain: stats plus every block.',
+             'example': 'curl http://127.0.0.1:5000/api/chain'},
+            {'method': 'GET', 'path': '/api/chain/validate',
+             'desc': 'Recompute all block hashes and links. Returns valid:false with details on tampering.',
+             'example': 'curl http://127.0.0.1:5000/api/chain/validate'},
+        ],
+    },
+    {
+        'group': 'History & on-chain verification',
+        'endpoints': [
+            {'method': 'GET', 'path': '/api/history/<subject_id>',
+             'desc': 'Subject metadata plus every FACE_REGISTRATION / FACE_VERIFICATION event.',
+             'example': 'curl http://127.0.0.1:5000/api/history/barack-obama-ee8f7c'},
+            {'method': 'GET', 'path': '/api/history/<subject_id>/contract',
+             'desc': 'Cross-check the local record hash against the on-chain recordHash on Polygon Amoy.',
+             'example': 'curl http://127.0.0.1:5000/api/history/barack-obama-ee8f7c/contract'},
+            {'method': 'GET', 'path': '/api/history/<subject_id>/export',
+             'desc': 'Download the full verification record set for a subject as JSON.',
+             'example': 'curl -O http://127.0.0.1:5000/api/history/barack-obama-ee8f7c/export'},
+        ],
+    },
+]
+
+
+@app.route('/api/docs')
+def api_docs():
+    return render_template('api_docs.html', groups=API_REFERENCE)
+
+
+@app.route('/api/history/<subject_id>/export')
+def api_history_export(subject_id):
+    """Download a subject's full verification record set as JSON."""
+    record = service.history(subject_id)
+    if record is None:
+        return jsonify({'ok': False, 'error': 'Unknown subject.'}), 404
+    verification_records = build_local_verification_records(record['events'])
+    payload = {
+        'ok': True,
+        'subject': record['subject'],
+        'verification_records': verification_records,
+        'events': record['events'],
+        'exported_at': datetime.now().isoformat(timespec='seconds'),
+    }
+    resp = jsonify(payload)
+    resp.headers['Content-Disposition'] = (
+        f'attachment; filename="{subject_id}-verification-records.json"'
+    )
+    return resp
+
+
 if __name__ == '__main__':
     app.run(host=HOST, port=PORT, debug=FLASK_DEBUG, use_reloader=False)

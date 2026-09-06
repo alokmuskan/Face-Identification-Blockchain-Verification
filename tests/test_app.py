@@ -97,6 +97,39 @@ def test_register_rejects_faceless_image(client):
 
 
 @pytest.mark.skipif(not _models_present(), reason='ONNX models not downloaded')
+def test_api_docs_page_ok(client):
+    response = client.get('/api/docs')
+    assert response.status_code == 200
+    assert b'API reference' in response.data
+    assert b'/api/identify' in response.data
+    assert b'/api/chain/validate' in response.data
+
+
+def test_history_export_unknown_subject_returns_404(client):
+    response = client.get('/api/history/does-not-exist/export')
+    assert response.status_code == 404
+    assert response.get_json()['ok'] is False
+
+
+def test_history_export_returns_downloadable_json(client):
+    # Enroll a subject directly through the store, then export its records.
+    import numpy as np
+    from app import service as svc  # module-level attribute lookup, not Flask attr
+    if svc.store.count() == 0:
+        embedding = np.ones(128, dtype=np.float32)
+        svc.store.add_subject('Export Test', embedding)
+    subject = svc.store.list_subjects()[0]
+    response = client.get(f"/api/history/{subject['subject_id']}/export")
+    assert response.status_code == 200
+    payload = response.get_json()
+    assert payload['ok'] is True
+    assert payload['subject']['subject_id'] == subject['subject_id']
+    assert 'verification_records' in payload
+    assert 'events' in payload
+    assert 'exported_at' in payload
+    assert 'attachment' in response.headers.get('Content-Disposition', '')
+
+
 def test_identify_rejects_faceless_image(client):
     response = client.post(
         '/api/identify',
