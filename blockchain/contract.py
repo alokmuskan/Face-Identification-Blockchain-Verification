@@ -8,12 +8,11 @@
 # Keep real private keys and funded wallet addresses out of version control.
 from __future__ import annotations
 
-import json
 import logging
 from pathlib import Path
 from typing import Any, Dict, Optional
 
-from ._keccak import keccak256, keccak256_hex, keccak256_of_json_payload
+from ._keccak import canonical_payload_json_bytes, keccak256, keccak256_hex, keccak256_of_json_payload
 
 logger = logging.getLogger(__name__)
 
@@ -33,34 +32,6 @@ def _load_abi() -> list:
 def _scaled_similarity(similarity: float) -> int:
     # Store similarity as an integer: similarity * 1e6.
     return int(round(max(0.0, min(1.0, similarity)) * 1_000_000))
-
-
-def _record_payload(
-    subject_id: str,
-    similarity: float,
-    result: str,
-    probe_image_hash: str,
-    web_result_count: int,
-    schema: str = "v1",
-) -> bytes:
-    """Build the exact canonical JSON payload bytes that are hashed on-chain.
-
-    The on-chain ``recordHash`` is ``keccak256(_record_payload(...))``. This
-    helper is the single source of truth for that payload so the Python side
-    computes exactly the same bytes as the contract.
-    """
-    payload = {
-        "subject_id": subject_id,
-        "similarity": similarity,
-        "result": result,
-        "probe_image_hash": probe_image_hash,
-        "web_result_count": web_result_count,
-        "record_schema": schema,
-        "chain": "polygon-amoy",
-    }
-    return json.dumps(payload, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode(
-        "utf-8"
-    )
 
 
 def compute_record_hash(
@@ -151,7 +122,7 @@ class ContractBridge:
     ) -> str:
         """Write a record on-chain and return the tx hash (utf8 hex)."""
         self._ensure_web3()
-        payload_bytes = _record_payload(
+        payload_bytes = canonical_payload_json_bytes(
             subject_id=subject_id,
             similarity=similarity,
             result=result,

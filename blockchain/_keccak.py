@@ -61,6 +61,77 @@ def keccak256_hex(data: bytes) -> str:
     return "0x" + keccak256(data).hex()
 
 
+_CANONICAL_PAYLOAD_FIELDS = (
+    "subject_id",
+    "similarity",
+    "result",
+    "probe_image_hash",
+    "web_result_count",
+    "record_schema",
+    "chain",
+)
+
+
+def canonical_payload(
+    subject_id: str,
+    similarity: float,
+    result: str,
+    probe_image_hash: str,
+    web_result_count: int,
+    schema: str = "v1",
+    *,
+    chain: str = "polygon-amoy",
+) -> dict:
+    """Build the canonical record payload dict.
+
+    This is the single source of truth for the payload shape that is hashed
+    on-chain by ``createRecord(...)`` as ``recordHash``. Any change to the
+    record shape should happen here only.
+    """
+    return {
+        "subject_id": subject_id,
+        "similarity": similarity,
+        "result": result,
+        "probe_image_hash": probe_image_hash,
+        "web_result_count": web_result_count,
+        "record_schema": schema,
+        "chain": chain,
+    }
+
+
+def canonical_payload_json_bytes(
+    subject_id: str,
+    similarity: float,
+    result: str,
+    probe_image_hash: str,
+    web_result_count: int,
+    schema: str = "v1",
+    *,
+    chain: str = "polygon-amoy",
+) -> bytes:
+    """Serialize the canonical payload to the exact JSON bytes that are hashed.
+
+    Uses ``sort_keys=True`` and the compact ``separators`` so the serialized
+    bytes are deterministic and match what web3 / Solidity would compute.
+    """
+    from json import dumps
+
+    return dumps(
+        canonical_payload(
+            subject_id=subject_id,
+            similarity=similarity,
+            result=result,
+            probe_image_hash=probe_image_hash,
+            web_result_count=web_result_count,
+            schema=schema,
+            chain=chain,
+        ),
+        sort_keys=True,
+        separators=(",", ":"),
+        ensure_ascii=False,
+    ).encode("utf-8")
+
+
 def keccak256_of_json_payload(
     subject_id: str,
     similarity: float,
@@ -68,17 +139,20 @@ def keccak256_of_json_payload(
     probe_image_hash: str,
     web_result_count: int,
     schema: str = "v1",
+    *,
+    chain: str = "polygon-amoy",
 ) -> bytes:
-    from json import dumps
+    """Return ``keccak256(canonical_payload_json_bytes(...))``.
 
-    payload = {
-        "subject_id": subject_id,
-        "similarity": similarity,
-        "result": result,
-        "probe_image_hash": probe_image_hash,
-        "web_result_count": web_result_count,
-        "record_schema": schema,
-        "chain": "polygon-amoy",
-    }
-    raw = dumps(payload, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode("utf-8")
-    return keccak256(raw)
+    This is the same value stored on-chain by ``createRecord(...)`` as
+    ``recordHash``.
+    """
+    return keccak256(canonical_payload_json_bytes(
+        subject_id=subject_id,
+        similarity=similarity,
+        result=result,
+        probe_image_hash=probe_image_hash,
+        web_result_count=web_result_count,
+        schema=schema,
+        chain=chain,
+    ))
