@@ -34,6 +34,25 @@
   <section class='panel'>
     <h2>Web / social media matches</h2>
     <p class='muted'>Reverse image search returned {{ result.web_results | length }} result(s) for the probe image.</p>
+
+    {# Thumbnail strip: use a real Yandex thumbnail when available, otherwise the probe face itself. #}
+    {% set probe_img = result.probe_path | default('') %}
+    <div class='thumbs thumbs-search'>
+      {% for hit in result.web_results[:8] %}
+      <a class='thumb-card' href='{{ hit.url }}' target='_blank' title='{{ hit.title }}'>
+        {% if hit.image_url %}
+        <img src='{{ hit.image_url }}' alt='match thumbnail' loading='lazy'>
+        {% elif probe_img %}
+        <img src='{{ url_for('media', relpath=probe_img) }}' alt='probe face' loading='lazy'>
+        {% else %}
+        <div class='thumb-fallback'>Face scan</div>
+        {% endif %}
+        <span class='thumb-tag {{ 'ok' if hit.page_type == 'social_media' else 'badge' }}'>{{ hit.page_type }}</span>
+      </a>
+      {% endfor %}
+    </div>
+    <p class='muted thumbs-note'>Click a thumbnail to open the matching page.</p>
+
     {% for hit in result.web_results %}
     <div class='search-hit'>
       <div class='hit-head'>
@@ -41,7 +60,12 @@
         <a href='{{ hit.url }}' target='_blank'>{{ hit.title }}</a>
       </div>
       <p class='muted'>{{ hit.description }}</p>
-      <a href='{{ hit.url }}' target='_blank' class='btn secondary small'>Open link</a>
+      <div class='hit-actions'>
+        <a href='{{ hit.url }}' target='_blank' class='btn secondary small'>Open link</a>
+        {% if hit.image_url %}
+        <a href='{{ hit.image_url }}' target='_blank' class='btn secondary small'>View image</a>
+        {% endif %}
+      </div>
     </div>
     {% endfor %}
   </section>
