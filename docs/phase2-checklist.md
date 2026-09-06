@@ -26,14 +26,14 @@ Use this as the final pre-submission review for the on-chain work.
 
 - [ ] `docs/onchain-proof.md` exists
 - [ ] It includes only public data:
-  - contract address
-  - tx hash
-  - block number
-  - subject id
-  - local record hash
-  - on-chain record hash
-  - verification result
-  - Polygonscan link
+  - contract address: `0x7fc71404Ce10f84B5C467AB3c9806507D422fEf4`
+  - tx hash: `0x0abb16c8429166476a85aa2606fb743404d264e98129fbf2938a6208c9ebb9ae`
+  - block number: `46874016`
+  - subject id: `barack-obama-ee8f7c`
+  - local record hash: `0x97189e2976e5009b8d221605aacb00398100d7974363eab455e6f006d970a456`
+  - on-chain record hash: `0x97189e2976e5009b8d221605aacb00398100d7974363eab455e6f006d970a456`
+  - verification result: `True`
+  - Polygonscan link: `https://amoy.polygonscan.com/tx/0x0abb16c8429166476a85aa2606fb743404d264e98129fbf2938a6208c9ebb9ae`
 - [ ] It does not contain private keys, signed payloads, or biometric images
 
 ## 4) Backend integration

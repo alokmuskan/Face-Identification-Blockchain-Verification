@@ -155,6 +155,7 @@ FaceVerificationHub, deployed on Polygon Amoy testnet.
 - Deployment and interaction notes: `docs/SMART_CONTRACT.md`
 - Live proof and cross-verification trail: `docs/onchain-proof.md`
 - Screen-recording narrative: `docs/recording-plan.md`
+- Detailed recording guide and submission form notes: `docs/recording-guide.md`
 
 ### What the on-chain bridge does
 
@@ -170,7 +171,19 @@ This is the same model the task asks for: a real blockchain record that can be r
 
 - Network: Polygon Amoy testnet
 - Contract address: `0x7fc71404Ce10f84B5C467AB3c9806507D422fEf4`
-- Latest verified submission: recorded in `docs/onchain-proof.md`
+- Subject ID: `barack-obama-ee8f7c`
+- Transaction hash: `0x0abb16c8429166476a85aa2606fb743404d264e98129fbf2938a6208c9ebb9ae`
+- Polygon block: `46874016`
+- Nonce: `10`
+- Gas used: `54270`
+- Status: `SUCCESS`
+- Similarity: `0.9999`
+- Web results: `10`
+- Local record hash: `0x97189e2976e5009b8d221605aacb00398100d7974363eab455e6f006d970a456`
+- On-chain record hash: `0x97189e2976e5009b8d221605aacb00398100d7974363eab455e6f006d970a456`
+- Transaction on Polygonscan:
+  `https://amoy.polygonscan.com/tx/0x0abb16c8429166476a85aa2606fb743404d264e98129fbf2938a6208c9ebb9ae`
+- Latest verified submission details: `docs/onchain-proof.md`
 
 Never commit wallet private keys. The on-chain config lives in a local, gitignored `config_chain.py` and is supplied via environment variable.
 

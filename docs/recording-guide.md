@@ -301,6 +301,55 @@ You'll need a **working link** to include in the submission form.
 
 ---
 
+## On-chain proof used for this recording guide
+
+The on-chain verification trail is recorded in `docs/onchain-proof.md`.
+
+Current public proof values:
+
+- Network: `Polygon Amoy`
+- Contract: `0x7fc71404Ce10f84B5C467AB3c9806507D422fEf4`
+- Subject ID: `barack-obama-ee8f7c`
+- Transaction hash: `0x0abb16c8429166476a85aa2606fb743404d264e98129fbf2938a6208c9ebb9ae`
+- Polygon block: `46874016`
+- Nonce: `10`
+- Gas used: `54270`
+- Status: `SUCCESS`
+- Similarity: `0.9999`
+- Web results: `10`
+- Local record hash: `0x97189e2976e5009b8d221605aacb00398100d7974363eab455e6f006d970a456`
+- On-chain record hash: `0x97189e2976e5009b8d221605aacb00398100d7974363eab455e6f006d970a456`
+
+Transaction link on Polygonscan:
+`https://amoy.polygonscan.com/tx/0x0abb16c8429166476a85aa2606fb743404d264e98129fbf2938a6208c9ebb9ae`
+
+---
+
+## Submission-form proof block
+
+If the submission form asks for on-chain proof, this is the exact block to paste or
+adapt:
+
+- Network: Polygon Amoy testnet
+- Contract: `0x7fc71404Ce10f84B5C467AB3c9806507D422fEf4`
+- Subject ID: `barack-obama-ee8f7c`
+- Transaction hash: `0x0abb16c8429166476a85aa2606fb743404d264e98129fbf2938a6208c9ebb9ae`
+- Polygon block: `46874016`
+- Nonce: `10`
+- Gas used: `54270`
+- Status: `SUCCESS`
+- Similarity: `0.9999`
+- Web results: `10`
+- Local record hash: `0x97189e2976e5009b8d221605aacb00398100d7974363eab455e6f006d970a456`
+- On-chain record hash: `0x97189e2976e5009b8d221605aacb00398100d7974363eab455e6f006d970a456`
+- Local and on-chain hashes match exactly.
+- `verifyRecord(...)` returned `True`.
+- Transaction link: https://amoy.polygonscan.com/tx/0x0abb16c8429166476a85aa2606fb743404d264e98129fbf2938a6208c9ebb9ae
+
+No wallet private key, signed payload, or biometric image is included in this proof.
+
+---
+
 ## Submission form
 
 Fill out: https://forms.gle/oZbQGuwiNeHVcHWo8

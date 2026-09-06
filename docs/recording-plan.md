@@ -1,5 +1,10 @@
 # Screen-recording plan
 
+This is the **short narrative + checklist** for the recording flow.
+
+For the full step-by-step terminal commands, expected output samples, tamper demo, and
+submission-form notes, see `docs/recording-guide.md`.
+
 Goal: show the pipeline end to end in one continuous recording:
 
 1. face scan
@@ -47,15 +52,18 @@ Show in order:
 ### 4. Show the on-chain verification
 
 - Open the contract verification endpoint in the browser or via `curl`:
-  `/api/history/<subject_id>/contract`
+  `/api/history/barack-obama-ee8f7c/contract`
 - Show:
-  - `local_record_hash`
-  - `on_chain_record_hash`
+  - `local_record_hash`: `0x97189e2976e5009b8d221605aacb00398100d7974363eab455e6f006d970a456`
+  - `on_chain_record_hash`: `0x97189e2976e5009b8d221605aacb00398100d7974363eab455e6f006d970a456`
   - `on_chain_match: true`
-  - `contract_tx_hash`
+  - `contract_tx_hash`: `0x0abb16c8429166476a85aa2606fb743404d264e98129fbf2938a6208c9ebb9ae`
 
 If possible, also open the Polygonscan transaction or contract address in a
 second tab so the grader can see the same record on the public chain explorer.
+
+Polygonscan transaction link:
+`https://amoy.polygonscan.com/tx/0x0abb16c8429166476a85aa2606fb743404d264e98129fbf2938a6208c9ebb9ae`
 
 ### 5. Tamper-evidence follow-up, if you want it
 
