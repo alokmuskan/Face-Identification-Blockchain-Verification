@@ -33,9 +33,11 @@ WEB_MIN_RESULTS_TO_FLOG = 1                  # log a warning when fewer than thi
 # Uploads
 MAX_IMAGE_BYTES = 10 * 1024 * 1024
 
-# Flask dev server
-HOST = '127.0.0.1'
-PORT = 5000
+# Flask dev server. HOST/PORT/FLASK_DEBUG can be overridden via environment
+# variables so the same code runs in Docker / PaaS deployments.
+HOST = os.environ.get('HOST', '127.0.0.1')
+PORT = int(os.environ.get('PORT', '5000'))
+FLASK_DEBUG = os.environ.get('FLASK_DEBUG', '0') == '1'
 
 # Optional on-chain contract address used by the re-verification UI.
 # When the bridge is not configured, this is only used to render Polygonscan links.

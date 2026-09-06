@@ -23,61 +23,47 @@ The challenge: most PaaS platforms (Heroku, Render, Railway) don't come with Chr
 
 ### Dockerfile
 
-Create `Dockerfile`:
+A working `Dockerfile` is committed at the repo root. It installs Google Chrome
+(direct `.deb`, no deprecated `apt-key`), downloads the ONNX models at build
+time, and serves the app with gunicorn:
 
 ```dockerfile
-FROM python:3.13-slim
+FROM python:3.11-slim
 
-# ── System dependencies ─────────────────────────────────────────────────
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    HOST=0.0.0.0 \
+    PORT=5000 \
+    FLASK_ENV=production
+
+# Google Chrome (stable) + runtime libs for headless Selenium.
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    wget \
-    gnupg2 \
-    ca-certificates \
-    && wget -q -O - https://dl-ssl.google.com/linux/linux_signing_key.pub \
-       | apt-key add - \
-    && echo "deb [arch=amd64] http://dl.google.com/linux/chrome/deb/ stable main" \
-       >> /etc/apt/sources.list.d/google-chrome.list \
-    && apt-get update \
-    && apt-get install -y google-chrome-stable \
-    && rm -rf /var/lib/apt/lists/* \
-    && apt-get clean
+        wget ca-certificates fonts-liberation libasound2 libatk-bridge2.0-0 \
+        libatk1.0-0 libcups2 libdbus-1-3 libdrm2 libgbm1 libgtk-3-0 libnspr4 \
+        libnss3 libx11-xcb1 libxcomposite1 libxdamage1 libxrandr2 libxss1 \
+        libxtst6 xdg-utils \
+    && wget -q -O /tmp/chrome.deb \
+        https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb \
+    && apt-get install -y --no-install-recommends /tmp/chrome.deb \
+    && rm -f /tmp/chrome.deb \
+    && rm -rf /var/lib/apt/lists/*
 
-# ── Python deps ─────────────────────────────────────────────────────────
 WORKDIR /app
 COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install --no-cache-dir -r requirements.txt \
+    && pip install --no-cache-dir eth-hash[pycryptodome] gunicorn
 
-# ── Browser ─────────────────────────────────────────────────────────────
-# Try to install Playwright's bundled Chromium as fallback
-RUN pip install playwright 2>/dev/null || true
-RUN python -m playwright install chromium 2>/dev/null || true
-
-# ── App code ────────────────────────────────────────────────────────────
 COPY . .
-
-# Download ONNX models (cached layer — won't re-download if models/ exists)
 RUN python tools/fetch_models.py || true
-
-# ── Runtime config ──────────────────────────────────────────────────────
-ENV FLASK_APP=app.py
-ENV FLASK_ENV=production
-ENV HOST=0.0.0.0
-ENV PORT=5000
-
-# Create data directories
-RUN mkdir -p data/faces data/probes
+RUN mkdir -p data/faces data/probes data/webcache
 
 EXPOSE 5000
-
-# Use gunicorn for production (install if not in requirements)
-# RUN pip install gunicorn
-# CMD ["gunicorn", "--bind", "0.0.0.0:5000", "--workers", "2", "app:app"]
-
-# For simplicity, use Flask dev server (only for demo purposes)
-CMD [".venv/bin/python", "app.py"]
+CMD ["gunicorn", "--bind", "0.0.0.0:5000", "--workers", "2", "--timeout", "120", "app:app"]
 ```
 
-**Note**: For a production deployment, use `gunicorn` instead of the Flask dev server. Add `gunicorn` to `requirements.txt`.
+Selenium 4.6+ downloads the matching chromedriver automatically (Selenium
+Manager), so no manual chromedriver install is needed. The `--timeout 120`
+matters because the reverse image search can take 30-60 seconds.
 
 ### Build and run locally (test before deploying)
 

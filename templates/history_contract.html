@@ -32,8 +32,6 @@ deployed smart contract on Polygon Amoy.</p>
     <dd><code>{{ report.local_block_index | default('—') }}</code></dd>
     <dt>Local block hash</dt>
     <dd><code class="wrap">{{ report.local_block_hash | default('—') }}</code></dd>
-    <dt>Local block hash (attached to tx)</dt>
-    <dd><code class="wrap">{{ report.local_block_hash | default('—') }}</code></dd>
     <dt>On-chain local block hash</dt>
     <dd><code class="wrap">{{ report.on_chain_local_block_hash | default('—') }}</code></dd>
     <dt>Local block hash matches on-chain</dt>
@@ -52,15 +50,80 @@ deployed smart contract on Polygon Amoy.</p>
     <dt>Contract chain</dt>
     <dd><code>{{ report.contract_chain or 'polygon-amoy' }}</code></dd>
   </dl>
-  {% if report.contract_tx_hash and config.CONTRACT_ADDRESS %}
-  <a class="btn secondary" href="https://amoy.polygonscan.com/tx/{{ report.contract_tx_hash }}"
-     target="_blank">Open transaction on Polygonscan</a>
-  <a class="btn secondary" href="https://amoy.polygonscan.com/address/{{ config.CONTRACT_ADDRESS }}"
-     target="_blank">Open contract on Polygonscan</a>
-  {% endif %}
-  {% endif %}
   {% endif %}
 </section>
+
+{% if report.local_verification_record %}
+{% set vr = report.local_verification_record %}
+<section class="panel">
+  <h2>Local verification record</h2>
+  <p class="muted">Rich verification metadata stored locally. The on-chain record remains the immutable public proof.</p>
+  <dl class="kv">
+    <dt>Subject ID</dt>
+    <dd><code>{{ vr.subject_id }}</code></dd>
+    <dt>Subject name</dt>
+    <dd><code>{{ vr.subject_name or '—' }}</code></dd>
+    <dt>Result</dt>
+    <dd>
+      {% if vr.result == 'VERIFIED' %}
+      <span class="badge ok">{{ vr.result }}</span>
+      {% elif vr.result == 'REJECTED' %}
+      <span class="badge bad">{{ vr.result }}</span>
+      {% else %}
+      <span class="muted">{{ vr.result or '—' }}</span>
+      {% endif %}
+    </dd>
+    <dt>Matched</dt>
+    <dd>
+      {% if vr.matched is sameas true %}Yes{% elif vr.matched is sameas false %}No{% else %}<span class="muted">—</span>{% endif %}
+    </dd>
+    <dt>Similarity</dt>
+    <dd><code>{{ vr.similarity }}</code> (threshold <code>{{ vr.threshold }}</code>)</dd>
+    <dt>Probe image hash (SHA-256)</dt>
+    <dd><code class="wrap">{{ vr.probe_image_hash or '—' }}</code></dd>
+    <dt>Embedding hash (SHA-256)</dt>
+    <dd><code class="wrap">{{ vr.embedding_hash or '—' }}</code></dd>
+    <dt>Block index</dt>
+    <dd><code>{{ vr.block_index | default('—') }}</code></dd>
+    <dt>Block hash</dt>
+    <dd><code class="wrap">{{ vr.block_hash or '—' }}</code></dd>
+    <dt>Block time</dt>
+    <dd><code>{{ vr.block_time | dt | default('—') }}</code></dd>
+  </dl>
+</section>
+
+<section class="panel">
+  <h2>Discovered posts</h2>
+  <p class="muted">Reverse image search results found for this probe.</p>
+  {% if vr.web_search_results %}
+  <ul class="list">
+    {% for item in vr.web_search_results %}
+    <li>
+      <a href="{{ item.url }}" target="_blank" class="link">{{ item.url }}</a>
+      <span class="muted"> — {{ item.page_type or 'web' }}</span>
+      {% if item.title %}
+      <br><span class="muted">{{ item.title }}</span>
+      {% endif %}
+    </li>
+    {% endfor %}
+  </ul>
+  {% else %}
+  <p class="muted">No web results attached to this local record.</p>
+  {% endif %}
+</section>
+{% endif %}
+
+{% if report.contract_tx_hash and config.CONTRACT_ADDRESS %}
+<section class="panel">
+  <h2>Public proof links</h2>
+  <p>
+    <a class="btn secondary" href="https://amoy.polygonscan.com/tx/{{ report.contract_tx_hash }}"
+       target="_blank">Open transaction on Polygonscan</a>
+    <a class="btn secondary" href="https://amoy.polygonscan.com/address/{{ config.CONTRACT_ADDRESS }}"
+       target="_blank">Open contract on Polygonscan</a>
+  </p>
+</section>
+{% endif %}
 
 <section class="panel">
   <h2>What this proves</h2>
@@ -69,10 +132,12 @@ deployed smart contract on Polygon Amoy.</p>
     <li>The on-chain record hash matches that local payload when the event has not been altered.</li>
     <li>The local block index and local block hash show exactly which local block carried the matching
       <code>contract_tx_hash</code>.</li>
+    <li>The richer local verification record stores probe hash, embedding hash, discovered posts, and verification
+      metadata for demo/readability purposes only.</li>
     <li>If the local ledger is tampered with, the recomputed local record hash will no longer match the
       on-chain record hash.</li>
   </ul>
   <p><a class="btn secondary" href="{{ url_for('history', subject_id=subject.subject_id) }}">Back to subject history</a>
      <a class="btn secondary" href="{{ url_for('ledger') }}">Open the ledger</a></p>
 </section>
-{% endblock %}
+{% endblock %}

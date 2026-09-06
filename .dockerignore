@@ -1,0 +1,30 @@
+# Secrets — never ship wallet keys
+config_chain.py
+.env
+.env.*
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.pytest_cache/
+
+# Runtime data (biometric images, ledger, face store)
+data/
+
+# Downloaded ONNX models (re-fetched during docker build)
+models/
+
+# Git / IDE / local tooling
+.git/
+.gitignore
+.vscode/
+.mcp.json
+.claude/
+.repowise/
+*.log
+*.pid
+Dockerfile
+.dockerignore

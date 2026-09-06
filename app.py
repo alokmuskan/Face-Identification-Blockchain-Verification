@@ -7,7 +7,7 @@ from datetime import datetime
 
 from flask import Flask, abort, jsonify, render_template, request, send_from_directory
 
-from config import BASE_DIR, HOST, MAX_IMAGE_BYTES, PORT, ensure_dirs
+from config import BASE_DIR, FLASK_DEBUG, HOST, MAX_IMAGE_BYTES, PORT, ensure_dirs
 from faceid.engine import FaceEngineError
 from services.verification_service import VerificationError, VerificationService
 
@@ -65,6 +65,21 @@ def handle_engine_error(exc):
     return render_template('error.html', message=str(exc)), 503
 
 
+@app.route('/health')
+def health():
+    # Liveness probe for deployment platforms (Render, Railway, Docker, etc.).
+    try:
+        models_ok = service.engine.models_available()
+    except Exception:
+        models_ok = False
+    return jsonify({
+        'status': 'ok' if models_ok else 'degraded',
+        'models_available': models_ok,
+        'subjects': service.store.count(),
+        'blocks': service.blockchain.stats().get('blocks'),
+    }), 200 if models_ok else 503
+
+
 @app.route('/media/<path:relpath>')
 def media(relpath):
     # Serves enrollment and probe images stored under data/ (local demo only).
@@ -117,12 +132,26 @@ def verify_page():
     return render_template('verify.html', report=report, stats=service.blockchain.stats())
 
 
+def build_local_verification_records(events: list) -> list:
+    records = []
+    for ev in events:
+        if ev.get('type') == 'FACE_VERIFICATION':
+            records.append(service.build_verification_record(ev))
+    return records
+
+
 @app.route('/history/<subject_id>')
 def history(subject_id):
     record = service.history(subject_id)
     if record is None:
         abort(404)
-    return render_template('history.html', subject=record['subject'], events=record['events'])
+    verification_records = build_local_verification_records(record['events'])
+    return render_template(
+        'history.html',
+        subject=record['subject'],
+        events=record['events'],
+        verification_records=verification_records,
+    )
 
 
 from config import CONTRACT_ADDRESS
@@ -206,4 +235,4 @@ def api_history_contract(subject_id):
 
 
 if __name__ == '__main__':
-    app.run(host=HOST, port=PORT, debug=True, use_reloader=False)
+    app.run(host=HOST, port=PORT, debug=FLASK_DEBUG, use_reloader=False)

@@ -4,28 +4,50 @@
 <h1>{{ subject.name }}</h1>
 <p class="muted">Subject ID <code>{{ subject.subject_id }}</code> - {{ subject.embedding_count }} face embedding(s) - enrolled {{ subject.created_at | dt }}</p>
 
+{% for vr in verification_records %}
 <section class="panel">
-  <h2>On-chain history</h2>
-  {% if events %}
-  <table>
-    <thead><tr><th>Time</th><th>Type</th><th>Result</th><th>Similarity</th><th>Image hash</th><th>Block</th></tr></thead>
-    <tbody>
-    {% for tx in events %}
-      <tr>
-        <td>{{ tx.block_time | dt }}</td>
-        <td>{{ tx.type }}</td>
-        <td>{% if tx.result %}<span class="badge {{ 'ok' if tx.result == 'VERIFIED' else 'bad' }}">{{ tx.result }}</span>{% else %}-{% endif %}</td>
-        <td>{{ tx.similarity if tx.similarity is defined else '-' }}</td>
-        <td><code class="wrap">{{ tx.image_hash or tx.probe_image_hash or '-' }}</code></td>
-        <td>#{{ tx.block_index }}</td>
-      </tr>
-    {% endfor %}
-    </tbody>
-  </table>
-  {% else %}
-  <p class="muted">No on-chain events for this subject yet.</p>
-  {% endif %}
+  <h2>Verification record #{{ loop.index }}</h2>
+  <dl class="kv">
+    <dt>Result</dt>
+    <dd>
+      {% if vr.result == 'VERIFIED' %}
+      <span class="badge ok">{{ vr.result }}</span>
+      {% elif vr.result == 'REJECTED' %}
+      <span class="badge bad">{{ vr.result }}</span>
+      {% else %}
+      <span class="muted">{{ vr.result or '—' }}</span>
+      {% endif %}
+    </dd>
+    <dt>Matched</dt>
+    <dd>{% if vr.matched is sameas true %}Yes{% elif vr.matched is sameas false %}No{% else %}<span class="muted">—</span>{% endif %}</dd>
+    <dt>Similarity</dt>
+    <dd><code>{{ vr.similarity }}</code> (threshold <code>{{ vr.threshold }}</code>)</dd>
+    <dt>Subject ID</dt>
+    <dd><code>{{ vr.subject_id }}</code></dd>
+    <dt>Subject name</dt>
+    <dd><code>{{ vr.subject_name or '—' }}</code></dd>
+    <dt>Probe image hash (SHA-256)</dt>
+    <dd><code class="wrap">{{ vr.probe_image_hash or '—' }}</code></dd>
+    <dt>Embedding hash (SHA-256)</dt>
+    <dd><code class="wrap">{{ vr.embedding_hash or '—' }}</code></dd>
+    <dt>Block</dt>
+    <dd>#{{ vr.block_index }} — <code class="wrap">{{ vr.block_hash or '—' }}</code></dd>
+    <dt>Block time</dt>
+    <dd><code>{{ vr.block_time | dt | default('—') }}</code></dd>
+    <dt>Contract tx hash</dt>
+    <dd><code class="wrap">{{ vr.contract_tx_hash or '—' }}</code></dd>
+    <dt>Contract chain</dt>
+    <dd><code>{{ vr.contract_chain or 'polygon-amoy' }}</code></dd>
+    <dt>Local block hash</dt>
+    <dd><code class="wrap">{{ vr.local_block_hash or '—' }}</code></dd>
+  </dl>
 </section>
+{% else %}
+<section class="panel">
+  <h2>Verification records</h2>
+  <p class="muted">No verification records for this subject yet.</p>
+</section>
+{% endfor %}
 
 <section class="panel">
   <h2>Enrollment images</h2>
@@ -39,4 +61,23 @@
   <p class="muted">No stored images.</p>
   {% endif %}
 </section>
+
+{% for vr in verification_records %}
+{% if vr.web_search_results %}
+<section class="panel">
+  <h2>Discovered posts</h2>
+  <ul class="list">
+    {% for item in vr.web_search_results %}
+    <li>
+      <a href="{{ item.url }}" target="_blank" class="link">{{ item.url }}</a>
+      <span class="muted"> — {{ item.page_type or 'web' }}</span>
+      {% if item.title %}
+      <br><span class="muted">{{ item.title }}</span>
+      {% endif %}
+    </li>
+    {% endfor %}
+  </ul>
+</section>
+{% endif %}
+{% endfor %}
 {% endblock %}

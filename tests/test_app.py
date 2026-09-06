@@ -47,6 +47,15 @@ def test_verify_page_ok(client):
     assert response.status_code == 200
 
 
+def test_health_endpoint_ok(client):
+    response = client.get('/health')
+    assert response.status_code in (200, 503)
+    payload = response.get_json()
+    assert payload['status'] in ('ok', 'degraded')
+    assert 'models_available' in payload
+    assert 'blocks' in payload
+
+
 def test_api_chain_starts_valid(client):
     response = client.get('/api/chain/validate')
     assert response.status_code == 200
