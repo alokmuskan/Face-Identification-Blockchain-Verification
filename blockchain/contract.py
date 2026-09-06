@@ -75,7 +75,6 @@ def compute_record_hash(
         - is hexadecimal
         - includes the 0x prefix
         - matches the hash stored on-chain by createRecord()
-
     When ``local_block_hash`` is provided, the record hash also commits to the
     local ledger block that carried the matching ``contract_tx_hash``.
     """
@@ -194,7 +193,6 @@ class ContractBridge:
 
         The transaction is considered successful only after Polygon
         confirms it in a block with receipt status == 1.
-
         When ``local_block_hash`` is provided, the same canonical payload is
         used and the printed record summary includes the local block hash so the
         on-chain record can be tied back to the local ledger.
@@ -227,7 +225,6 @@ class ContractBridge:
         # ---------------------------------------------------------------------
         # 3. Print record information
         # ---------------------------------------------------------------------
-
         print()
         print("========== POLYGON AMOY RECORD ==========")
         print(f"Subject ID       : {subject_id}")
@@ -279,7 +276,6 @@ class ContractBridge:
                 self._account.address,
                 "pending",
             )
-
             tx = func.build_transaction(
                 {
                     "chainId": self._w3.eth.chain_id,
@@ -461,7 +457,6 @@ class ContractBridge:
             return None
 
         return pair[1]
-
     def verify_record(
         self,
         subject_id: str,

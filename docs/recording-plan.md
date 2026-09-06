@@ -4,7 +4,6 @@ This is the **short narrative + checklist** for the recording flow.
 
 For the full step-by-step terminal commands, expected output samples, tamper demo, and
 submission-form notes, see `docs/recording-guide.md`.
-
 Goal: show the pipeline end to end in one continuous recording:
 
 1. face scan

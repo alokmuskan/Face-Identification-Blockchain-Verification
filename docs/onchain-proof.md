@@ -92,8 +92,7 @@ Expected response shape:
 - `ok`: `true`
 - `local_record_hash`: `0x97189e2976e5009b8d221605aacb00398100d7974363eab455e6f006d970a456`
 - `on_chain_record_hash`: `0x97189e2976e5009b8d221605aacb00398100d7974363eab455e6f006d970a456`
-- `on_chain_match`: `true`
-- `contract_tx_hash`: `0x0abb16c8429166476a85aa2606fb743404d264e98129fbf2938a6208c9ebb9ae`.
+- `on_chain_match`: `true`  - `contract_tx_hash`: `0x0abb16c8429166476a85aa2606fb743404d264e98129fbf2938a6208c9ebb9ae`.
 
 If the app is no longer running with the same configured bridge, the endpoint may
 return a bridge-not-configured message. In that case, use Option 2 below.

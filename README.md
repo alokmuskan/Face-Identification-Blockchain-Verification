@@ -40,6 +40,19 @@ Face scan input → Web/social media search (find matching post)
 - [Roadmap](#roadmap)
 
 ---
+Submission requirements
+● GitHub repo link
+● A screen recording of the working project (no live working link required)
+● Submission form link : https://forms.gle/oZbQGuwiNeHVcHWo8  (No resubmissions will be allowed — submit only when your build is final.)
+
+Screen recording
+● Record your screen showing the pipeline working end to end: face scan → social post found → blockchain upload/verification.
+● No editing or production needed — a plain screen recording is enough.
+● Upload it anywhere (YouTube unlisted, Google Drive, Loom, etc.) and share a working link.
+
+Timeline
+● Task launch: August 31, 2026
+● Deadline: Sept 7, 2026, 11:59 PM
 
 ## What the project does
 
@@ -616,7 +629,7 @@ The app exposes these pages:
 - **Web results** — a dedicated view for the reverse-image search results attached
   to a block.
 
----
+
 
 ## JSON API
 
