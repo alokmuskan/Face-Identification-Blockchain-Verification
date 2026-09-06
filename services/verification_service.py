@@ -214,7 +214,11 @@ class VerificationService:
             web_result_count=payload['web_result_count'],
         )
         on_chain_hash = self.contract_bridge.get_record_hash(subject_id)
-        matched = self.contract_bridge.verify_record(subject_id, on_chain_hash or '')
+        # Compare the LOCAL payload hash against the on-chain record hash.
+        # This is the tamper-evidence check: if the local payload was altered,
+        # local_record_hash will differ from the on-chain recordHash and this
+        # will return False.
+        matched = self.contract_bridge.verify_record(subject_id, local_record_hash)
         return {
             'ok': True,
             'subject_id': subject_id,

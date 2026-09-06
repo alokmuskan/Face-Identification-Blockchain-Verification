@@ -13,9 +13,6 @@ import logging
 from pathlib import Path
 from typing import Any, Dict, Optional
 
-from web3 import Web3
-from web3.eth import Account
-
 from ._keccak import keccak256, keccak256_hex, keccak256_of_json_payload
 
 logger = logging.getLogger(__name__)
@@ -74,12 +71,14 @@ def compute_record_hash(
     web_result_count: int,
     schema: str = "v1",
 ) -> str:
-    """Return the keccak256 record hash (utf8 hex) for the canonical payload.
+    """Return the keccak256 record hash (utf8 hex, with ``0x`` prefix) for the
+    canonical payload.
 
-    This is the same value stored on-chain by ``createRecord(...)`` as
-    ``recordHash``.
+    This matches the representation returned by ``get_record_hash(...)`` and
+    the value stored on-chain by ``createRecord(...)`` as ``recordHash``, so
+    the local and on-chain hashes compare equal directly.
     """
-    return keccak256_of_json_payload(
+    return "0x" + keccak256_of_json_payload(
         subject_id=subject_id,
         similarity=similarity,
         result=result,
@@ -90,7 +89,12 @@ def compute_record_hash(
 
 
 class ContractBridge:
-    """Thin wrapper around FaceVerificationHub on Polygon Amoy."""
+    """Thin wrapper around FaceVerificationHub on Polygon Amoy.
+
+    The web3 dependency is imported lazily, so this module can be imported
+    even when web3 is not installed. Instantiation only stores the config;
+    the actual RPC connection and contract binding happen on first use.
+    """
 
     def __init__(
         self,
@@ -99,17 +103,38 @@ class ContractBridge:
         private_key: str,
         chain_id: int = 80143,
     ) -> None:
-        self._w3 = Web3(Web3.HTTPProvider(rpc_url))
+        self._rpc_url = rpc_url
+        self._contract_address = contract_address
+        self._private_key = private_key
+        self._chain_id = chain_id
+        self._w3: Any = None
+        self._account: Any = None
+        self._contract: Any = None
+
+    def _ensure_web3(self) -> None:
+        """Lazy-import web3 and bind the contract on first RPC use."""
+        if self._w3 is not None:
+            return
+        try:
+            from web3 import Web3  # type: ignore[import]
+            from web3.eth import Account  # type: ignore[import]
+        except Exception as exc:
+            raise RuntimeError(
+                "web3 is required for on-chain operations. Install it with: "
+                "pip install web3"
+            ) from exc
+
+        self._w3 = Web3(Web3.HTTPProvider(self._rpc_url))
         if not self._w3.is_connected():
-            raise RuntimeError(f"Cannot connect to RPC at {rpc_url}")
-        if self._w3.eth.chain_id != chain_id:
+            raise RuntimeError(f"Cannot connect to RPC at {self._rpc_url}")
+        if self._w3.eth.chain_id != self._chain_id:
             logger.warning(
                 "Connected chain id %s differs from expected Polygon Amoy %s",
                 self._w3.eth.chain_id,
-                chain_id,
+                self._chain_id,
             )
-        self._contract_address = Web3.to_checksum_address(contract_address)
-        self._account: Account = Account.from_key(private_key)
+        self._account = Account.from_key(self._private_key)
+        self._contract_address = Web3.to_checksum_address(self._contract_address)
         self._contract = self._w3.eth.contract(
             address=self._contract_address, abi=_load_abi()
         )
@@ -125,6 +150,7 @@ class ContractBridge:
         web_result_count: int,
     ) -> str:
         """Write a record on-chain and return the tx hash (utf8 hex)."""
+        self._ensure_web3()
         payload_bytes = _record_payload(
             subject_id=subject_id,
             similarity=similarity,
@@ -165,6 +191,7 @@ class ContractBridge:
 
     def get_record_hash(self, subject_id: str) -> Optional[str]:
         """Return the on-chain record hash (utf8 hex) for *subject_id*, or None."""
+        self._ensure_web3()
         try:
             raw = self._contract.functions.getRecord(subject_id).call()
         except Exception:
@@ -180,6 +207,7 @@ class ContractBridge:
         payload (as returned by ``compute_record_hash(...)``). It is **not** re-hashed
         here, because the on-chain value is also the keccak256 of the payload.
         """
+        self._ensure_web3()
         expected_bytes32 = Web3.to_bytes(hexstr=expected_hash_utf8) if expected_hash_utf8 else b"\x00" * 32
         try:
             return bool(self._contract.functions.verifyRecord(subject_id, expected_bytes32).call())
@@ -187,10 +215,13 @@ class ContractBridge:
             return False
 
     def record_count(self) -> int:
+        self._ensure_web3()
         return int(self._contract.functions.recordCount().call())
 
     def last_record_at(self) -> int:
+        self._ensure_web3()
         return int(self._contract.functions.lastRecordAt().call())
 
     def last_record_by(self) -> str:
+        self._ensure_web3()
         return self._contract.functions.lastRecordBy().call()
