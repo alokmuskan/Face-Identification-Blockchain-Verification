@@ -195,15 +195,29 @@ class WebSearchEngine:
 
                 file_input.send_keys(tmp_path)
 
-                # Wait for result cards or at least some content to appear.
+                # Wait for the results page. Yandex takes ~10-20s to process
+                # the upload and navigate from the landing page to /search.
+                # NOTE: the landing page is full of its own yandex links and
+                # background-image divs, so waiting for those elements alone
+                # returns immediately and extraction runs on the wrong page.
                 wait = WebDriverWait(driver, self.timeout)
                 try:
                     wait.until(
+                        lambda d: '/search' in (d.current_url or '')
+                        or len(d.find_elements(By.CSS_SELECTOR,
+                                               'div.serp-item, div.CompactView')) > 0,
+                        'Results page did not load within the timeout.',
+                    )
+                except Exception:
+                    # Some UI variants may render results without navigation.
+                    pass
+
+                # Once on the results page, give the cards a moment to render.
+                try:
+                    WebDriverWait(driver, 15).until(
                         lambda d: len(d.find_elements(By.CSS_SELECTOR, 'div.serp-item,'
-                                                       'div.CompactView,'
-                                                       'div[style*="background-image"],'
-                                                       'a[href*="yandex"]')) > 0,
-                        'Results did not appear within the timeout.',
+                                                      'div.CompactView,'
+                                                      'div[style*="background-image"]')) > 0,
                     )
                 except Exception:
                     # Even without detected cards, try to extract whatever is there.

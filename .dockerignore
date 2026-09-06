@@ -16,7 +16,6 @@ data/
 
 # Downloaded ONNX models (re-fetched during docker build)
 models/
-
 # Git / IDE / local tooling
 .git/
 .gitignore
@@ -28,3 +27,6 @@ models/
 *.pid
 Dockerfile
 .dockerignore
+
+# Docs and CI metadata not needed inside the image
+render.yaml
