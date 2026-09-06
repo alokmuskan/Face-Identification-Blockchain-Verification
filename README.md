@@ -18,10 +18,12 @@ Submission requirements
 ● GitHub repo link
 ● A screen recording of the working project (no live working link required)
 ● Submission form link : https://forms.gle/oZbQGuwiNeHVcHWo8  (No resubmissions will be allowed — submit only when your build is final.)
+
 Screen recording
 ● Record your screen showing the pipeline working end to end: face scan → social post found → blockchain upload/verification.
 ● No editing or production needed — a plain screen recording is enough.
 ● Upload it anywhere (YouTube unlisted, Google Drive, Loom, etc.) and share a working link.
+
 Timeline
 ● Task launch: August 31, 2026
 ● Deadline: Sept 7, 2026, 11:59 PM
@@ -143,6 +145,35 @@ Then open `http://127.0.0.1:5000`.
 - **Tamper evidence**: `validate_chain()` recomputes every block hash, checks the proof of work and verifies that every block links to its predecessor. The `/verify` page and `/api/chain/validate` report the result block by block.
 - This is a **demo ledger**: the PoW demonstrates tamper evidence, not distributed consensus. The on-chain record is a hash fingerprint of the face verification event and the discovered web/social-media matches — enough to prove the data existed in this form and has not been altered.
 
+## On-chain smart contract
+
+This project also writes a tamper-evident record to a live smart contract,
+FaceVerificationHub, deployed on Polygon Amoy testnet.
+
+- Contract source: `contracts/FaceVerificationHub.sol`
+- ABI: `contracts/FaceVerificationHub.abi.json`
+- Deployment and interaction notes: `docs/SMART_CONTRACT.md`
+- Live proof and cross-verification trail: `docs/onchain-proof.md`
+- Screen-recording narrative: `docs/recording-plan.md`
+
+### What the on-chain bridge does
+
+1. The local pipeline builds a canonical JSON record payload for the face verification result and the discovered web/social matches.
+2. The payload is hashed with Keccak-256.
+3. The hash is submitted to the smart contract as `recordHash` for the subject.
+4. The transaction hash is stored in the local ledger block as `contract_tx_hash`.
+5. The app can then re-verify the local payload against the on-chain record through `/api/history/<subject_id>/contract`.
+
+This is the same model the task asks for: a real blockchain record that can be re-verified against the local data, not just a local simulation.
+
+### Current deployment (update this block when you redeploy)
+
+- Network: Polygon Amoy testnet
+- Contract address: `0x7fc71404Ce10f84B5C467AB3c9806507D422fEf4`
+- Latest verified submission: recorded in `docs/onchain-proof.md`
+
+Never commit wallet private keys. The on-chain config lives in a local, gitignored `config_chain.py` and is supplied via environment variable.
+
 ## Reverse image search details
 
 - Engine: **Yandex Images** (`yandex.com/images`) via a headless Chrome driven by Selenium.
@@ -164,6 +195,7 @@ Then open `http://127.0.0.1:5000`.
 - Models: YuNet (face detection) and SFace (face recognition) from OpenCV Zoo, used through `opencv-contrib-python`. They must be downloaded once with `tools/fetch_models.py`.
 - Matching is against **enrolled subjects** only — the pipeline identifies a face, then (only on a match) looks the probe up on the web.
 - The built-in Flask dev server is for local use only.
+- The on-chain contract currently stores one latest record per subject. For a longer audit trail, a per-post append-only registry would be a natural extension.
 
 ## Tests
 
@@ -201,6 +233,7 @@ POST /api/identify              multipart form: image -> verdict + block + web_r
 GET  /api/chain                 full chain with all blocks
 GET  /api/chain/validate        integrity report: valid, blocks_checked, errors
 GET  /api/history/<subject_id>  subject record plus on-chain events
+GET  /api/history/<subject_id>/contract  on-chain cross-check: local_record_hash, on_chain_record_hash, on_chain_match, contract_tx_hash
 ```
 
 Example:
@@ -212,3 +245,11 @@ curl http://127.0.0.1:5000/api/chain/validate
 ```
 
 The `/api/identify` response now includes `web_results[]`, each with `url`, `title`, `description`, `image_url` and `page_type`.
+
+## Submission checklist
+
+- [ ] GitHub repo is public or accessible to the reviewers
+- [ ] README explains the pipeline, the blockchains used, and the known limitations
+- [ ] One screen recording shows face scan → web/social result → on-chain write → on-chain verification
+- [ ] The on-chain proof note (`docs/onchain-proof.md`) matches what the recording shows
+- [ ] No wallet private key is committed or visible in the recording
