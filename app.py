@@ -7,7 +7,7 @@ from datetime import datetime
 
 from flask import Flask, abort, jsonify, render_template, request, send_from_directory
 
-from config import BASE_DIR, FLASK_DEBUG, HOST, MAX_IMAGE_BYTES, PORT, ensure_dirs
+from config import BASE_DIR, FLASK_DEBUG, HOST, MAX_IMAGE_BYTES, PORT, PROBES_DIR, ensure_dirs
 from faceid.engine import FaceEngineError
 from services.verification_service import VerificationError, VerificationService
 
@@ -63,6 +63,44 @@ def handle_engine_error(exc):
     if request.path.startswith('/api/'):
         return jsonify({'ok': False, 'error': str(exc)}), 503
     return render_template('error.html', message=str(exc)), 503
+
+
+# ---------------------------------------------------------------------------
+# Demo page: one-click end-to-end pipeline run for the screen recording.
+# ---------------------------------------------------------------------------
+
+def _demo_samples() -> list:
+    """Return probe image files available on disk for the one-click demo."""
+    if not PROBES_DIR.exists():
+        return []
+    exts = ('.jpg', '.jpeg', '.png', '.webp')
+    files = sorted(p.name for p in PROBES_DIR.iterdir() if p.suffix.lower() in exts)
+    # Prefer explicit probe-named files over hash-named copies.
+    named = [f for f in files if 'probe' in f.lower() or 'obama' in f.lower()]
+    return named + [f for f in files if f not in named]
+
+
+@app.route('/demo')
+def demo_page():
+    samples = _demo_samples()
+    return render_template('demo.html', samples=samples, stats=service.dashboard_stats())
+
+
+@app.route('/demo/run', methods=['POST'])
+def demo_run():
+    """Run the full pipeline on a stored sample probe and return the outcome."""
+    samples = _demo_samples()
+    if not samples:
+        return jsonify({'ok': False, 'error': 'No sample probe images available. '
+                                                'Run an identify once, or add a probe under data/probes/.'}), 409
+    requested = (request.form.get('sample') or '').strip()
+    chosen = requested if requested in samples else samples[0]
+    image_bytes = (PROBES_DIR / chosen).read_bytes()
+    try:
+        outcome = service.identify(image_bytes)
+    except VerificationError as exc:
+        return jsonify({'ok': False, 'error': str(exc)}), 400
+    return jsonify({'ok': True, 'sample': chosen, **outcome})
 
 
 @app.route('/health')

@@ -1,0 +1,151 @@
+{% extends 'base.html' %}
+{% block title %}Live Demo - Face Chain Verify{% endblock %}
+{% block content %}
+<h1>Live pipeline demo</h1>
+<p class="muted">One click runs the whole pipeline on a stored probe: face scan → identity match → web/social media search → local ledger + on-chain record → verification.</p>
+
+<section class="panel">
+  <div class="stepper" id="stepper">
+    <div class="step" data-step="1"><span class="step-num">1</span><span class="step-label">Face scan</span></div>
+    <div class="step" data-step="2"><span class="step-num">2</span><span class="step-label">Detect + embed</span></div>
+    <div class="step" data-step="3"><span class="step-num">3</span><span class="step-label">Identity match</span></div>
+    <div class="step" data-step="4"><span class="step-num">4</span><span class="step-label">Web search</span></div>
+    <div class="step" data-step="5"><span class="step-num">5</span><span class="step-label">Ledger + on-chain</span></div>
+  </div>
+
+  {% if samples %}
+  <form id="demo-form" class="stack">
+    {% if samples | length > 1 %}
+    <label class="muted" for="demo-sample">Probe image</label>
+    <select id="demo-sample" name="sample">
+      {% for s in samples %}<option value="{{ s }}">{{ s }}</option>{% endfor %}
+    </select>
+    {% endif %}
+    <button type="submit" id="demo-run" class="btn primary">Run demo</button>
+    <p class="muted" id="demo-hint">The web search step can take up to ~45 seconds. Watch the pipeline steps advance as the run proceeds.</p>
+  </form>
+  {% else %}
+  <div class="alert bad">No sample probe images found under <code>data/probes/</code>. Run one identify first, or drop a photo named <code>obama-probe.jpg</code> into that folder.</div>
+  {% endif %}
+</section>
+
+<section class="panel" id="demo-result" hidden>
+  <h2>Result</h2>
+  <div id="demo-body"></div>
+</section>
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function () {
+  var form = document.getElementById('demo-form');
+  var runBtn = document.getElementById('demo-run');
+  var stepper = document.getElementById('stepper');
+  var resultPanel = document.getElementById('demo-result');
+  var body = document.getElementById('demo-body');
+
+  function setStep(n, state) {
+    if (!stepper) return;
+    var steps = stepper.querySelectorAll('.step');
+    for (var i = 0; i < steps.length; i++) {
+      steps[i].classList.remove('active', 'done', 'error');
+      if (i + 1 < n) steps[i].classList.add('done');
+      else if (i + 1 === n) steps[i].classList.add(state === 'error' ? 'error' : 'active');
+    }
+  }
+
+  function esc(s) {
+    var div = document.createElement('div');
+    div.textContent = s == null ? '' : String(s);
+    return div.innerHTML;
+  }
+
+  function renderResult(data) {
+    var html = '';
+    var verdict = data.result === 'VERIFIED'
+      ? '<span class="badge ok">VERIFIED</span>'
+      : '<span class="badge bad">REJECTED</span>';
+    var matchName = data.match && data.match.subject
+      ? esc(data.match.subject.name)
+      : (data.match && data.match.candidate ? esc(data.match.candidate.name) + ' (below threshold)' : 'No subjects enrolled yet');
+    html += '<h3>' + verdict + ' — ' + matchName + '</h3>';
+    html += '<p>Cosine similarity <code>' + esc(data.match.similarity) + '</code> vs threshold <code>' + esc(data.match.threshold) + '</code></p>';
+    html += '<dl class="kv">' +
+      '<dt>Probe image hash</dt><dd><code class="wrap">' + esc(data.transaction.probe_image_hash) + '</code></dd>' +
+      '<dt>Local block</dt><dd>#' + esc(data.block.index) + ' — mined ' + esc(new Date(data.block.timestamp * 1000).toLocaleString()) + '</dd>' +
+      '<dt>Block hash</dt><dd><code class="wrap">' + esc(data.block.hash) + '</code></dd>' +
+      '<dt>Web results</dt><dd>' + esc((data.web_results || []).length) + '</dd>' +
+      '</dl>';
+
+    var web = data.web_results || [];
+    if (web.length) {
+      html += '<h3>Web / social media matches</h3><ul class="list">';
+      for (var i = 0; i < web.length; i++) {
+        html += '<li><a href="' + esc(web[i].url) + '" target="_blank" class="link">' + esc(web[i].url) + '</a>' +
+                '<span class="muted"> — ' + esc(web[i].page_type || 'web') + '</span>' +
+                (web[i].title ? '<br><span class="muted">' + esc(web[i].title) + '</span>' : '') + '</li>';
+      }
+      html += '</ul>';
+    } else {
+      html += '<p class="muted">No external web matches returned for this probe.</p>';
+    }
+
+    var tx = data.transaction || {};
+    if (tx.contract_tx_hash) {
+      html += '<h3>On-chain record</h3><dl class="kv">' +
+        '<dt>Contract tx hash</dt><dd><code class="wrap">' + esc(tx.contract_tx_hash) + '</code></dd>' +
+        '<dt>Contract chain</dt><dd><code>' + esc(tx.contract_chain || 'polygon-amoy') + '</code></dd>' +
+        '<dt>Local block hash (traceability)</dt><dd><code class="wrap">' + esc(tx.local_block_hash || '—') + '</code></dd>' +
+        '</dl>' +
+        '<p><a class="btn secondary" href="https://amoy.polygonscan.com/tx/' + esc(tx.contract_tx_hash) + '" target="_blank">Open on Polygonscan</a></p>';
+    } else {
+      html += '<p class="muted">No on-chain write in this run (bridge not configured or record not submitted). The local ledger still holds the event.</p>';
+    }
+    html += '<p><a class="btn secondary" href="' + window.location.pathname + '">Run again</a></p>';
+    body.innerHTML = html;
+  }
+
+  if (form) {
+    form.addEventListener('submit', function (ev) {
+      ev.preventDefault();
+      if (runBtn) { runBtn.disabled = true; runBtn.textContent = 'Running pipeline…'; }
+      if (resultPanel) { resultPanel.hidden = true; }
+      var sample = document.getElementById('demo-sample');
+      var fd = new FormData();
+      if (sample) fd.append('sample', sample.value);
+
+      setStep(1, 'active');
+      var stepTimer = setInterval(function () {
+        var active = stepper.querySelector('.step.active');
+        var next = active ? active.nextElementSibling : null;
+        if (next) { active.classList.remove('active'); active.classList.add('done'); next.classList.add('active'); }
+      }, 1200);
+
+      fetch('/demo/run', { method: 'POST', body: fd })
+        .then(function (r) { return r.json(); })
+        .then(function (data) {
+          clearInterval(stepTimer);
+          if (!data.ok) {
+            setStep(5, 'error');
+            body.innerHTML = '<div class="alert bad">' + esc(data.error || 'Demo run failed.') + '</div>';
+            resultPanel.hidden = false;
+            return;
+          }
+          setStep(5, 'done');
+          renderResult(data);
+          resultPanel.hidden = false;
+        })
+        .catch(function (err) {
+          clearInterval(stepTimer);
+          setStep(5, 'error');
+          body.innerHTML = '<div class="alert bad">' + esc(err.message || 'Request failed.') + '</div>';
+          resultPanel.hidden = false;
+        })
+        .finally(function () {
+          if (runBtn) { runBtn.disabled = false; runBtn.textContent = 'Run demo'; }
+        });
+    });
+  }
+})();
+</script>
+{% endblock %}

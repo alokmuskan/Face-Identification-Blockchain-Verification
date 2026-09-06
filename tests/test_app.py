@@ -56,6 +56,21 @@ def test_health_endpoint_ok(client):
     assert 'blocks' in payload
 
 
+def test_demo_page_ok(client):
+    response = client.get('/demo')
+    assert response.status_code == 200
+    assert b'Live pipeline demo' in response.data
+    assert b'stepper' in response.data
+
+
+def test_demo_run_without_samples_returns_409(client):
+    # The test data dir has no probes, so the demo must degrade gracefully.
+    response = client.post('/demo/run')
+    assert response.status_code == 409
+    assert response.get_json()['ok'] is False
+    assert 'No sample probe' in response.get_json()['error']
+
+
 def test_api_chain_starts_valid(client):
     response = client.get('/api/chain/validate')
     assert response.status_code == 200
