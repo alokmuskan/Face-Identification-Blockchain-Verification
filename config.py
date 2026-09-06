@@ -37,6 +37,10 @@ MAX_IMAGE_BYTES = 10 * 1024 * 1024
 HOST = '127.0.0.1'
 PORT = 5000
 
+# Optional on-chain contract address used by the re-verification UI.
+# When the bridge is not configured, this is only used to render Polygonscan links.
+CONTRACT_ADDRESS = "0x7fc71404Ce10f84B5C467AB3c9806507D422fEf4"
+
 def ensure_dirs() -> None:
     for directory in (DATA_DIR, MODELS_DIR, FACES_DIR, PROBES_DIR):
         directory.mkdir(parents=True, exist_ok=True)

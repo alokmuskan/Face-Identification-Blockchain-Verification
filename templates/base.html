@@ -5,11 +5,13 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>{% block title %}Face Chain Verify{% endblock %}</title>
 <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+{% block extra_head %}{% endblock %}
 </head>
 <body>
+<div class="top-accent"></div>
 <header class="topbar">
   <a class="brand" href="{{ url_for('dashboard') }}">Face<span>Chain</span>Verify</a>
-  <nav>
+  <nav class="nav">
     <a href="{{ url_for('dashboard') }}">Dashboard</a>
     <a href="{{ url_for('register') }}">Register</a>
     <a href="{{ url_for('identify') }}">Identify</a>
@@ -20,7 +22,7 @@
 <main class="container">
 {% block content %}{% endblock %}
 </main>
-<footer class="footer">Face Identification and Blockchain Verification - local demo. All data stays on this machine.</footer>
+<footer class="footer">Face Identification and Blockchain Verification &middot; local demo &middot; all data stays on this machine.</footer>
 {% block scripts %}{% endblock %}
 </body>
 </html>

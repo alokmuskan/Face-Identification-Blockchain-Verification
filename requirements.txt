@@ -5,3 +5,11 @@ Pillow>=10.0
 pytest>=8.0
 playwright>=1.40
 selenium>=4.6
+
+# Optional: on-chain bridge to Polygon Amoy (FaceVerificationHub).
+# Install these only when you want to submit/verify records on-chain.
+# The core project (face detection + local ledger) works fine without them.
+# eth-hash is the Keccak-256 backend used to compute on-chain record hashes;
+# pycryptodome is the recommended hash backend for eth-hash on Windows.
+# eth-hash[pycryptodome]
+# web3

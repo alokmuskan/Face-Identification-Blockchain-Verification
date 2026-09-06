@@ -6,7 +6,9 @@ from __future__ import annotations
 import base64
 import hashlib
 import io
+import json
 import logging
+import os
 import re
 import tempfile
 import time
@@ -83,6 +85,8 @@ def _domain(url: str) -> str:
         return ''
 
 
+DEFAULT_CACHE_TTL_SECONDS = 3600  # 1 hour
+
 class WebSearchEngine:
     """
     Headless browser-based reverse image search using Yandex Images.
@@ -97,11 +101,21 @@ class WebSearchEngine:
       2. Click the camera search button
       3. Upload the image via the file input
       4. Wait for results, then extract link cards
+
+    Results are cached on disk per image hash so repeated identify attempts
+    for the same probe do not re-run the slow browser search during a demo.
     """
 
-    def __init__(self, timeout_seconds: int = 30) -> None:
+    def __init__(
+        self,
+        timeout_seconds: int = 30,
+        cache_dir: Optional[Path] = None,
+        cache_ttl_seconds: int = DEFAULT_CACHE_TTL_SECONDS,
+    ) -> None:
         self.timeout = timeout_seconds
         self._driver: Any = None
+        self._cache_dir = cache_dir
+        self._cache_ttl = cache_ttl_seconds
 
     def _ensure_driver(self) -> Any:
         if self._driver is not None:
@@ -146,6 +160,15 @@ class WebSearchEngine:
         driver = self._ensure_driver()
         results: List[WebSearchResult] = []
 
+        digest = hashlib.sha256(image_bytes).hexdigest()
+
+        # If caching is enabled and a fresh cache file exists for this probe,
+        # return those results without launching the browser.
+        if self._cache_dir is not None:
+            cached = self._load_cache(digest)
+            if cached is not None:
+                return cached
+
         with tempfile.NamedTemporaryFile(suffix='.png', delete=False) as tmp:
             tmp.write(image_bytes)
             tmp_path = tmp.name
@@ -187,7 +210,69 @@ class WebSearchEngine:
             except OSError:
                 pass
 
+        # Persist results to disk so subsequent identical probes skip the browser.
+        if self._cache_dir is not None:
+            try:
+                self._save_cache(digest, results)
+            except Exception:
+                logger.debug('Web search cache write skipped.', exc_info=True)
+
         return results
+
+    def _load_cache(self, digest: str) -> Optional[List[WebSearchResult]]:
+        """Return cached results for *digest* if they are still fresh."""
+        if self._cache_dir is None:
+            return None
+        try:
+            self._cache_dir.mkdir(parents=True, exist_ok=True)
+        except OSError:
+            return None
+
+        path = self._cache_dir / f'{digest}.json'
+        if not path.exists():
+            return None
+
+        try:
+            raw = path.read_text(encoding='utf-8')
+            payload = json.loads(raw)
+        except (OSError, ValueError):
+            return None
+
+        now = time.time()
+        if payload.get('expires_at', 0) < now:
+            try:
+                path.unlink(missing_ok=True)
+            except OSError:
+                pass
+            return None
+
+        results: List[WebSearchResult] = []
+        for item in payload.get('results', []):
+            try:
+                results.append(WebSearchResult(
+                    url=item.get('url', ''),
+                    title=item.get('title', ''),
+                    description=item.get('description', ''),
+                    image_url=item.get('image_url'),
+                    page_type=item.get('page_type', 'web'),
+                ))
+            except Exception:
+                continue
+        return results
+
+    def _save_cache(self, digest: str, results: List[WebSearchResult]) -> None:
+        """Persist *results* for *digest* with an expiry timestamp."""
+        if self._cache_dir is None:
+            return
+        self._cache_dir.mkdir(parents=True, exist_ok=True)
+        payload = {
+            'expires_at': time.time() + self._cache_ttl,
+            'results': [r.to_dict() for r in results],
+        }
+        path = self._cache_dir / f'{digest}.json'
+        tmp = path.with_suffix('.tmp')
+        tmp.write_text(json.dumps(payload, indent=2, ensure_ascii=False), encoding='utf-8')
+        os.replace(tmp, path)
 
     def _click_search_by_image(self, driver: Any) -> None:
         """Click the reverse-image search entry point on Yandex Images.
@@ -374,6 +459,39 @@ class WebSearchEngine:
                         break
                 except Exception:
                     pass
+
+        # Approach 1.5: If cards were found but no image_url was captured,
+        # try once more to attach a thumbnail from the result link elements.
+        # Many Yandex result links wrap the preview image in an <img>.
+        if results and not any(r.image_url for r in results):
+            try:
+                links = driver.find_elements(By.CSS_SELECTOR, 'a[href]')
+                seen_links = {r.url for r in results}
+                for link in links:
+                    url = link.get_attribute('href') or ''
+                    if not url or 'yandex' in url or url in seen_links:
+                        continue
+                    img = None
+                    try:
+                        img = link.find_element(By.CSS_SELECTOR, 'img')
+                    except Exception:
+                        try:
+                            img = link.find_element(By.CSS_SELECTOR, 'img')
+                        except Exception:
+                            pass
+                    if img is None:
+                        continue
+                    candidate = img.get_attribute('src') or img.get_attribute('data-src') or img.get_attribute('data-lazy-src')
+                    if candidate and candidate.startswith(('http:', 'https:')):
+                        for r in results:
+                            if r.url == url and r.image_url is None:
+                                r.image_url = candidate
+                                break
+                        seen_links.add(url)
+                    if len([r for r in results if r.image_url]) >= 6:
+                        break
+            except Exception:
+                pass
 
         # Approach 2: If card-based extraction did not work, parse the page
         # body text to find links and their captions (Yandex text format).

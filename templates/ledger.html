@@ -21,8 +21,9 @@
         <span class="badge">{{ tx.type }}</span>
         {% if tx.result %}<span class="badge {{ 'ok' if tx.result == 'VERIFIED' else 'bad' }}">{{ tx.result }}</span>{% endif %}
         {% if tx.subject_id %}<span class="muted">subject: {{ tx.subject_name or tx.subject_id }} ({{ tx.subject_id }})</span>{% endif %}
-        {% if tx.web_search_count is defined %}
+        {% if tx.web_search_count is defined and tx.web_search_count %}
         <span class="muted">web matches: {{ tx.web_search_count }}</span>
+        <a class="btn small" href="{{ url_for('web_results', block_index=block.index) }}">View results</a>
         {% endif %}
       </div>
       {% if tx.web_search_results %}

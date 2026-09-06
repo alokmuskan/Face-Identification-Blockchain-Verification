@@ -15,6 +15,7 @@ ensure_dirs()
 
 app = Flask(__name__)
 app.config['MAX_CONTENT_LENGTH'] = MAX_IMAGE_BYTES
+app.config['MAX_FORM_MEMORY_SIZE'] = 5 * 1024 * 1024
 service = VerificationService()
 
 
@@ -124,6 +125,37 @@ def history(subject_id):
     return render_template('history.html', subject=record['subject'], events=record['events'])
 
 
+from config import CONTRACT_ADDRESS
+
+@app.route('/history/<subject_id>/contract')
+def history_contract(subject_id):
+    record = service.history(subject_id)
+    if record is None:
+        abort(404)
+    report = service.verify_contract(subject_id)
+    return render_template(
+        'history_contract.html',
+        subject=record['subject'],
+        report=report,
+        config={'CONTRACT_ADDRESS': CONTRACT_ADDRESS},
+    )
+
+
+@app.route('/web-results/<int:block_index>')
+def web_results(block_index):
+    block = service.blockchain.find_block(block_index)
+    if block is None:
+        abort(404)
+    tx = None
+    for t in block.transactions:
+        if t.get('web_search_results'):
+            tx = t
+            break
+    if tx is None:
+        abort(404)
+    return render_template('web_results.html', block=block.to_dict(), tx=tx)
+
+
 @app.route('/api/status')
 def api_status():
     return jsonify({
@@ -166,6 +198,11 @@ def api_history(subject_id):
     if record is None:
         return jsonify({'ok': False, 'error': 'Unknown subject.'}), 404
     return jsonify({'ok': True, **record})
+
+
+@app.route('/api/history/<subject_id>/contract')
+def api_history_contract(subject_id):
+    return jsonify({'ok': True, **service.verify_contract(subject_id)})
 
 
 if __name__ == '__main__':

@@ -1,0 +1,99 @@
+{% extends 'base.html' %}
+{% block title %}Web Results - Face Chain Verify{% endblock %}
+{% block content %}
+<h1>Web / social media results</h1>
+<p class="muted">Reverse image search results recorded on-chain in <strong>Block #{{ block.index }}</strong>, mined {{ block.timestamp | dt }}.</p>
+
+<section class="panel">
+  <h2>Block record (summary)</h2>
+  <dl class="kv">
+    <dt>Block</dt><dd>#{{ block.index }}</dd>
+    <dt>Mined</dt><dd>{{ block.timestamp | dt }}</dd>
+    <dt>Nonce</dt><dd>{{ block.nonce }}</dd>
+    <dt>Hash</dt><dd><code class="wrap">{{ block.hash }}</code></dd>
+    <dt>Previous hash</dt><dd><code class="wrap">{{ block.previous_hash }}</code></dd>
+  </dl>
+</section>
+
+<section class="panel">
+  <h2>Transaction</h2>
+  <dl class="kv">
+    <dt>Type</dt><dd><span class="badge">{{ tx.type }}</span></dd>
+    {% if tx.result %}<dt>Result</dt><dd><span class="badge {{ 'ok' if tx.result == 'VERIFIED' else 'bad' }}">{{ tx.result }}</span></dd>{% endif %}
+    <dt>Subject</dt><dd>{{ tx.subject_name or tx.subject_id or '-' }}</dd>
+    <dt>Similarity</dt><dd>{{ tx.similarity if tx.similarity is defined else '-' }}</dd>
+    <dt>Probe image hash</dt><dd><code class="wrap">{{ tx.probe_image_hash }}</code></dd>
+  </dl>
+</dl>
+</section>
+
+<section class="panel">
+  <h2>{{ tx.web_search_count }} result(s) discovered</h2>
+  {% set probe_hash = tx.probe_image_hash | default('') %}
+  {% set probe_media = probe_hash and 'probes/' ~ probe_hash ~ '.png' %}
+  {% set hits = tx.web_search_results | list %}
+  {% if hits %}
+  <div class="filter-bar">
+    <span class="muted">Filter:</span>
+    <a class="filter-link {{ 'filter-active' if not view_type }}" href="{{ url_for('web_results', block_index=block.index) }}?view=all">All</a>
+    <a class="filter-link" href="{{ url_for('web_results', block_index=block.index) }}?view=social">Social</a>
+    <a class="filter-link" href="{{ url_for('web_results', block_index=block.index) }}?view=image">Image hosts</a>
+    <a class="filter-link" href="{{ url_for('web_results', block_index=block.index) }}?view=blog">Blogs</a>
+    <a class="filter-link" href="{{ url_for('web_results', block_index=block.index) }}?view=web">Web</a>
+  </div>
+
+  {# Thumbnail strip: use a real Yandex thumbnail when available, otherwise the probe face itself. #}
+  <div class="thumbs thumbs-search mb">
+    {% for hit in hits[:12] %}
+    <a class="thumb-card" href="{{ hit.url }}" target="_blank" title="{{ hit.title }}">
+      {% if hit.image_url %}
+      <img src="{{ hit.image_url }}" alt="match thumbnail" loading="lazy">
+      {% elif probe_media %}
+      <img src="{{ url_for('media', relpath=probe_media) }}" alt="probe face" loading="lazy">
+      {% else %}
+      <div class="thumb-fallback">Face scan</div>
+      {% endif %}
+      <span class="thumb-tag {{ 'ok' if hit.page_type == 'social_media' else 'badge' }}">{{ hit.page_type }}</span>
+    </a>
+    {% endfor %}
+  </div>
+  <p class="muted thumbs-note">Click a thumbnail to open the matching page.</p>
+
+  <div class="result-list">
+    {% for hit in hits %}
+    <article class="result-card">
+      <header class="result-card-head">
+        <span class="badge {{ 'ok' if hit.page_type == 'social_media' else 'badge' }}">{{ hit.page_type }}</span>
+        <a href="{{ hit.url }}" target="_blank" class="result-card-title">{{ hit.title or hit.url }}</a>
+      </header>
+      <p class="result-card-desc">{{ hit.description }}</p>
+      <footer class="result-card-foot">
+        <a href="{{ hit.url }}" target="_blank" class="btn secondary small">Open page</a>
+        {% if hit.image_url %}
+        <a href="{{ hit.image_url }}" target="_blank" class="btn secondary small">View image</a>
+        {% endif %}
+      </footer>
+    </article>
+    {% endfor %}
+  </div>
+  {% else %}
+  <p class="muted">No web / social media matches were recorded in this block.</p>
+  {% endif %}
+</section>
+{% endblock %}
+{% block scripts %}
+<script>
+(function() {
+  var params = new URLSearchParams(location.search);
+  var view = params.get('view') || 'all';
+  var links = document.querySelectorAll('.filter-link');
+  for (var i = 0; i < links.length; i++) {
+    var href = links[i].getAttribute('href') || '';
+    var match = href.indexOf('view=') !== -1 ? href.split('view=')[1].split('&')[0] : '';
+    if (match === view || (view === 'all' && match === '')) {
+      links[i].classList.add('filter-active');
+    }
+  }
+})();
+</script>
+{% endblock %}

@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Any, Dict, Optional
 
 from blockchain import Blockchain
+from blockchain.contract import compute_record_hash
 from config import BASE_DIR, DIFFICULTY, FACES_DIR, GENESIS_MESSAGE, LEDGER_PATH, PROBES_DIR, WEB_SEARCH_TIMEOUT
 from faceid.engine import FaceEngineError, get_engine
 from faceid.store import FaceStore
@@ -25,6 +26,45 @@ class VerificationService:
         self.blockchain = Blockchain(LEDGER_PATH, difficulty=DIFFICULTY, genesis_message=GENESIS_MESSAGE)
         self.store = FaceStore()
         self.engine = get_engine()
+        self.contract_bridge: Any = None
+        self._load_contract_bridge()
+
+    # -- on-chain bridge setup ---------------------------------------------
+
+    def _load_contract_bridge(self) -> None:
+        """Lazy-load the on-chain bridge only when a local config is present.
+
+        When config_chain.py is not present or is incomplete, the pipeline
+        continues with the local ledger only and never touches the network.
+        """
+        try:
+            import config_chain as cc  # type: ignore[import]
+        except Exception:
+            return
+        address = getattr(cc, 'CONTRACT_ADDRESS', None)
+        private_key = getattr(cc, 'PRIVATE_KEY', None)
+        rpc = getattr(cc, 'POLY_AMOY_RPC', None)
+        chain_id = getattr(cc, 'CHAIN_ID', 80002)
+        if not address or not private_key or not rpc:
+            logger.info('On-chain bridge disabled: config_chain missing values.')
+            return
+        try:
+            from blockchain.contract import ContractBridge  # defer import so web3 is optional
+        except Exception as exc:
+            logger.warning('On-chain bridge unavailable: %s', exc)
+            self.contract_bridge = None
+            return
+        try:
+            self.contract_bridge = ContractBridge(
+                rpc_url=rpc,
+                contract_address=address,
+                private_key=private_key,
+                chain_id=chain_id,
+            )
+            logger.info('On-chain bridge enabled for contract %s.', address)
+        except Exception as exc:
+            logger.warning('On-chain bridge could not be initialized: %s', exc)
+            self.contract_bridge = None
 
     # -- helpers -----------------------------------------------------------
 
@@ -88,12 +128,16 @@ class VerificationService:
         web_results = None
         if match['matched']:
             try:
-                with WebSearchEngine(timeout_seconds=WEB_SEARCH_TIMEOUT) as engine:
+                with WebSearchEngine(
+                    timeout_seconds=WEB_SEARCH_TIMEOUT,
+                    cache_dir=PROBES_DIR.parent / 'webcache',
+                    cache_ttl_seconds=3600,
+                ) as engine:
                     web_results = engine.search(image_bytes)
             except Exception as exc:
                 logger.warning('Web search skipped: %s', exc)
 
-        tx, block = self.blockchain.record({
+        tx_base = {
             'type': 'FACE_VERIFICATION',
             'result': result,
             'subject_id': subject_id,
@@ -104,7 +148,38 @@ class VerificationService:
             'probe_image_hash': digest,
             'web_search_results': [r.to_dict() for r in (web_results or [])],
             'web_search_count': len(web_results or []),
-        })
+        }
+
+        # Optionally write a matching record to the smart contract and store
+        # the on-chain tx hash in the local ledger for cross-verification.
+        # The local block is mined first so the on-chain record can reference it.
+        contract_tx_hash: Optional[str] = None
+        local_block_hash: Optional[str] = None
+        if self.contract_bridge is not None and match['matched']:
+            try:
+                # Mine the local block before submitting on-chain so the on-chain
+                # record can reference the exact local block that carries it.
+                tx, block = self.blockchain.record(tx_base)
+                local_block_hash = block.hash
+                contract_tx_hash = self.contract_bridge.submit_record(
+                    subject_id=subject_id,
+                    similarity=match['similarity'],
+                    result=result,
+                    probe_image_hash=digest,
+                    web_result_count=len(web_results or []),
+                    local_block_hash=local_block_hash,
+                )
+                tx_base['contract_tx_hash'] = contract_tx_hash
+                tx_base['contract_chain'] = 'polygon-amoy'
+                tx_base['local_block_hash'] = local_block_hash
+
+                # Attach the local block hash that the on-chain record references.
+                tx_base['block_index'] = block.index
+                tx_base['block_hash'] = block.hash
+            except Exception as exc:
+                logger.warning('On-chain write skipped: %s', exc)
+
+        tx, block = self.blockchain.record(tx_base)
         return {
             'result': result,
             'match': match,
@@ -118,6 +193,61 @@ class VerificationService:
 
     def verify_chain(self) -> Dict[str, Any]:
         return self.blockchain.validate_chain()
+
+    def verify_contract(self, subject_id: str) -> Dict[str, Any]:
+        """Cross-check the local ledger payload against the on-chain recordHash."""
+        if self.contract_bridge is None:
+            return {'ok': False, 'error': 'On-chain bridge is not configured.'}
+        # Find the latest local FACE_VERIFICATION payload for this subject.
+        events = self.blockchain.transactions_for_subject(subject_id)
+        verif = None
+        for ev in reversed(events):
+            if ev.get('type') == 'FACE_VERIFICATION':
+                verif = ev
+                break
+        if verif is None:
+            return {'ok': False, 'error': 'No local FACE_VERIFICATION record for this subject.'}
+        # compute_record_hash is the single source of truth for the canonical
+        # payload + its keccak256 hash. Don't reconstruct the payload bytes here.
+        local_record_hash = compute_record_hash(
+            subject_id=verif.get('subject_id', subject_id),
+            similarity=verif.get('similarity', 0.0),
+            result=verif.get('result', ''),
+            probe_image_hash=verif.get('probe_image_hash', ''),
+            web_result_count=verif.get('web_search_count', 0),
+        )
+        on_chain_hash = self.contract_bridge.get_record_hash(subject_id)
+        # Compare the LOCAL payload hash against the on-chain record hash.
+        # This is the tamper-evidence check: if the local payload was altered,
+        # local_record_hash will differ from the on-chain recordHash and this
+        # will return False.
+        matched = self.contract_bridge.verify_record(subject_id, local_record_hash)
+        # Optional traceability: read the on-chain local block hash if the
+        # contract supports it and the record has one attached.
+        local_block_hash_on_chain = None
+        try:
+            pair = self.contract_bridge.get_record_with_local_block_hash(subject_id)
+            if pair is not None:
+                _, local_block_hash_on_chain = pair
+        except Exception as exc:
+            logger.debug('Could not read on-chain local block hash: %s', exc)
+
+        return {
+            'ok': True,
+            'subject_id': subject_id,
+            'local_record_hash': local_record_hash,
+            'on_chain_record_hash': on_chain_hash,
+            'on_chain_match': matched,
+            'contract_tx_hash': verif.get('contract_tx_hash'),
+            'contract_chain': verif.get('contract_chain', 'polygon-amoy'),
+            'local_block_hash': verif.get('local_block_hash'),
+            'on_chain_local_block_hash': local_block_hash_on_chain,
+            'local_block_index': verif.get('block_index'),
+            'local_block_hash_matches_on_chain': (
+                local_block_hash_on_chain is not None
+                and verif.get('local_block_hash') == local_block_hash_on_chain
+            ),
+        }
 
     def history(self, subject_id: str) -> Optional[Dict[str, Any]]:
         subject = self.store.get(subject_id)
