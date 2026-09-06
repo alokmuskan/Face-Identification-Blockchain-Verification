@@ -13,7 +13,6 @@
 # control. Copy config_chain.example.py to config_chain.py, fill in the values, and
 # keep config_chain.py out of the repo.
 import argparse
-import hashlib
 import json
 import logging
 import sys
@@ -33,7 +32,7 @@ except ModuleNotFoundError:
     )
     sys.exit(2)
 
-from blockchain.contract import ContractBridge
+from blockchain.contract import ContractBridge, compute_record_hash
 
 EXAMPLE_CONFIG = """
 # Copy this file to config_chain.py and fill in the values.
@@ -61,20 +60,6 @@ def _ensure_example_config() -> None:
         logger.info("Wrote %s", example)
 
 
-def _payload_hash(subject_id: str, similarity: float, result: str, probe_image_hash: str, web_count: int) -> str:
-    payload = {
-        "subject_id": subject_id,
-        "similarity": similarity,
-        "result": result,
-        "probe_image_hash": probe_image_hash,
-        "web_result_count": web_count,
-        "record_schema": "v1",
-        "chain": "polygon-amoy",
-    }
-    raw = json.dumps(payload, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode("utf-8")
-    return hashlib.sha256(raw).hexdigest()
-
-
 def _submit(args: argparse.Namespace) -> None:
     bridge = ContractBridge(
         rpc_url=config_chain.POLY_AMOY_RPC,
@@ -89,18 +74,25 @@ def _submit(args: argparse.Namespace) -> None:
         probe_image_hash=args.probe_image_hash,
         web_result_count=args.web_count,
     )
+    # The canonical on-chain record hash is keccak256 of the payload bytes.
+    # compute_record_hash() produces the exact same value the contract stores.
+    local_record_hash = compute_record_hash(
+        subject_id=args.subject_id,
+        similarity=args.similarity,
+        result=args.result,
+        probe_image_hash=args.probe_image_hash,
+        web_result_count=args.web_count,
+    )
     print("On-chain tx hash:", tx_hash)
     print("Polygonscan link: https://amoy.polygonscan.com/tx/" + tx_hash)
-    payload_hash = _payload_hash(
-        args.subject_id, args.similarity, args.result, args.probe_image_hash, args.web_count
-    )
-    print("Local payload SHA-256:", payload_hash)
-    print("On-chain recordHash (keccak256 of same payload):")
-    record_hash = bridge.get_record_hash(args.subject_id)
-    print("  ", record_hash)
+    print("Local record hash (keccak256 of payload, should equal on-chain recordHash):")
+    print("  ", local_record_hash)
+    print("On-chain recordHash:")
+    on_chain_hash = bridge.get_record_hash(args.subject_id)
+    print("  ", on_chain_hash)
+    print("Cross-check (local == on-chain):", local_record_hash == (on_chain_hash or ""))
     print(
-        "Cross-check: local payload bytes keccak256 should equal on-chain recordHash. "
-        "Use tools/verify_contract.py for a full cross-validation."
+        "If the line above is True, the on-chain record is bound to this exact local payload."
     )
 
 

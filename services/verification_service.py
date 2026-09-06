@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Any, Dict, Optional
 
 from blockchain import Blockchain
+from blockchain.contract import compute_record_hash
 from config import BASE_DIR, DIFFICULTY, FACES_DIR, GENESIS_MESSAGE, LEDGER_PATH, PROBES_DIR, WEB_SEARCH_TIMEOUT
 from faceid.engine import FaceEngineError, get_engine
 from faceid.store import FaceStore
@@ -204,7 +205,14 @@ class VerificationService:
             'chain': 'polygon-amoy',
         }
         payload_bytes = json.dumps(payload, sort_keys=True, separators=(',', ':'), ensure_ascii=False).encode('utf-8')
-        local_record_hash = hashlib.sha256(payload_bytes).hexdigest()  # for display only; on-chain uses keccak256
+        # This is the same keccak256 value the contract stores as recordHash.
+        local_record_hash = compute_record_hash(
+            subject_id=payload['subject_id'],
+            similarity=payload['similarity'],
+            result=payload['result'],
+            probe_image_hash=payload['probe_image_hash'],
+            web_result_count=payload['web_result_count'],
+        )
         on_chain_hash = self.contract_bridge.get_record_hash(subject_id)
         matched = self.contract_bridge.verify_record(subject_id, on_chain_hash or '')
         return {
