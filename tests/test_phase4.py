@@ -35,6 +35,38 @@ def _minimal_tx(**overrides):
     return tx
 
 
+def test_legacy_record_hash_matches_on_chain_proof():
+    """The documented on-chain record must be reproducible exactly.
+
+    The submission record for barack-obama-ee8f7c was created before the
+    local_block_hash traceability field existed, so the canonical payload must
+    omit the field when empty, or this regression test fails.
+    """
+    h = compute_record_hash(
+        subject_id='barack-obama-ee8f7c',
+        similarity=0.9999,
+        result='VERIFIED',
+        probe_image_hash='744dd848fbb0584229169e01c4944664957c62495fb9e8af514a088ebca43e19',
+        web_result_count=10,
+        local_block_hash='',
+    )
+    assert h == '0x97189e2976e5009b8d221605aacb00398100d7974363eab455e6f006d970a456'
+
+
+def test_local_block_hash_participates_when_set():
+    h_with = compute_record_hash(
+        subject_id='s2', similarity=0.8, result='VERIFIED',
+        probe_image_hash='x' * 64, web_result_count=2,
+        local_block_hash='0x' + 'ab' * 32,
+    )
+    h_without = compute_record_hash(
+        subject_id='s2', similarity=0.8, result='VERIFIED',
+        probe_image_hash='x' * 64, web_result_count=2,
+        local_block_hash='',
+    )
+    assert h_with != h_without
+
+
 def test_build_verification_record_passes_through_metadata():
     tx = _minimal_tx(
         block_index=3,
@@ -88,6 +120,47 @@ def test_verify_contract_without_bridge_reports_unconfigured():
         assert 'bridge is not configured' in report['error']
     finally:
         service.contract_bridge = original
+
+
+def test_resolve_chain_config_env_fallback(monkeypatch):
+    """Env vars must fill in when config_chain.py is absent/empty."""
+    import sys
+    from services.verification_service import resolve_chain_config
+    monkeypatch.setitem(sys.modules, 'config_chain', None)  # force import failure
+    monkeypatch.setattr('services.verification_service.os.environ', {
+        'WEB3_RPC_URL': 'https://rpc.example',
+        'CONTRACT_ADDRESS': '0x' + 'ab' * 20,
+        'PRIVATE_KEY': '0x' + 'cd' * 32,
+    })
+    cfg = resolve_chain_config()
+    assert cfg == {
+        'rpc_url': 'https://rpc.example',
+        'contract_address': '0x' + 'ab' * 20,
+        'private_key': '0x' + 'cd' * 32,
+        'chain_id': 80002,
+    }
+
+
+def test_deployed_contract_supports_local_block_hash_detection():
+    """Feature detection must flag old deployments that lack the 7-arg overload."""
+    from blockchain.contract import deployed_contract_supports_local_block_hash
+    from eth_utils import keccak
+
+    sel = bytes(keccak(
+        text='createRecord(string,bytes32,uint256,string,string,uint256,bytes32)'
+    )[:4])
+    bytecode_with = b'\x00' + sel + b'\xff' * 8
+    bytecode_without = b'\x00' + bytes(keccak(text='totally-other-func()')[:4]) + b'\xff' * 8
+    assert deployed_contract_supports_local_block_hash(bytecode_with) is True
+    assert deployed_contract_supports_local_block_hash(bytecode_without) is False
+
+
+def test_resolve_chain_config_returns_none_when_unset(monkeypatch):
+    import sys
+    from services.verification_service import resolve_chain_config
+    monkeypatch.setitem(sys.modules, 'config_chain', None)
+    monkeypatch.setattr('services.verification_service.os.environ', {})
+    assert resolve_chain_config() is None
 
 
 class _FakeBridge:

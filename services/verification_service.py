@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import hashlib
 import logging
+import os
 from pathlib import Path
 from typing import Any, Dict, Optional
 
@@ -21,6 +22,34 @@ class VerificationError(Exception):
     pass
 
 
+def resolve_chain_config() -> Optional[Dict[str, Any]]:
+    """Return on-chain bridge settings, or None when unconfigured.
+
+    Precedence: values from the local, gitignored config_chain.py, with the
+    WEB3_RPC_URL / CONTRACT_ADDRESS / PRIVATE_KEY environment variables as
+    fallbacks so deployments can supply secrets via the environment.
+    """
+    try:
+        import config_chain as cc  # type: ignore[import]
+        rpc = getattr(cc, 'POLY_AMOY_RPC', '') or os.environ.get('WEB3_RPC_URL', '')
+        address = getattr(cc, 'CONTRACT_ADDRESS', '') or os.environ.get('CONTRACT_ADDRESS', '')
+        private_key = getattr(cc, 'PRIVATE_KEY', '') or os.environ.get('PRIVATE_KEY', '')
+        chain_id = getattr(cc, 'CHAIN_ID', 80002)
+    except Exception:
+        rpc = os.environ.get('WEB3_RPC_URL', '')
+        address = os.environ.get('CONTRACT_ADDRESS', '')
+        private_key = os.environ.get('PRIVATE_KEY', '')
+        chain_id = int(os.environ.get('CHAIN_ID', '80002'))
+    if not (rpc and address and private_key):
+        return None
+    return {
+        'rpc_url': rpc,
+        'contract_address': address,
+        'private_key': private_key,
+        'chain_id': chain_id,
+    }
+
+
 class VerificationService:
     def __init__(self) -> None:
         self.blockchain = Blockchain(LEDGER_PATH, difficulty=DIFFICULTY, genesis_message=GENESIS_MESSAGE)
@@ -32,21 +61,15 @@ class VerificationService:
     # -- on-chain bridge setup ---------------------------------------------
 
     def _load_contract_bridge(self) -> None:
-        """Lazy-load the on-chain bridge only when a local config is present.
+        """Lazy-load the on-chain bridge only when a config is present.
 
-        When config_chain.py is not present or is incomplete, the pipeline
-        continues with the local ledger only and never touches the network.
+        When config_chain.py is not present, is incomplete, or the relevant
+        environment variables are unset, the pipeline continues with the local
+        ledger only and never touches the network.
         """
-        try:
-            import config_chain as cc  # type: ignore[import]
-        except Exception:
-            return
-        address = getattr(cc, 'CONTRACT_ADDRESS', None)
-        private_key = getattr(cc, 'PRIVATE_KEY', None)
-        rpc = getattr(cc, 'POLY_AMOY_RPC', None)
-        chain_id = getattr(cc, 'CHAIN_ID', 80002)
-        if not address or not private_key or not rpc:
-            logger.info('On-chain bridge disabled: config_chain missing values.')
+        cfg = resolve_chain_config()
+        if cfg is None:
+            logger.info('On-chain bridge disabled: no config_chain.py values or env vars.')
             return
         try:
             from blockchain.contract import ContractBridge  # defer import so web3 is optional
@@ -56,12 +79,12 @@ class VerificationService:
             return
         try:
             self.contract_bridge = ContractBridge(
-                rpc_url=rpc,
-                contract_address=address,
-                private_key=private_key,
-                chain_id=chain_id,
+                rpc_url=cfg['rpc_url'],
+                contract_address=cfg['contract_address'],
+                private_key=cfg['private_key'],
+                chain_id=cfg['chain_id'],
             )
-            logger.info('On-chain bridge enabled for contract %s.', address)
+            logger.info('On-chain bridge enabled for contract %s.', cfg['contract_address'])
         except Exception as exc:
             logger.warning('On-chain bridge could not be initialized: %s', exc)
             self.contract_bridge = None
@@ -156,34 +179,44 @@ class VerificationService:
         # The local block is mined first so the on-chain record can reference it.
         contract_tx_hash: Optional[str] = None
         local_block_hash: Optional[str] = None
-        if self.contract_bridge is not None and match['matched']:
-            try:
-                # Mine the local block before submitting on-chain so the on-chain
-                # record can reference the exact local block that carries it.
-                tx, block = self.blockchain.record(tx_base)
-                local_block_hash = block.hash
-                contract_tx_hash = self.contract_bridge.submit_record(
-                    subject_id=subject_id,
-                    similarity=match['similarity'],
-                    result=result,
-                    probe_image_hash=digest,
-                    web_result_count=len(web_results or []),
-                    local_block_hash=local_block_hash,
+        on_chain_error: Optional[str] = None
+        on_chain_skipped_reason: Optional[str] = None
+        if match['matched']:
+            if self.contract_bridge is None:
+                on_chain_skipped_reason = (
+                    'On-chain bridge not configured (set config_chain.py or the '
+                    'WEB3_RPC_URL / CONTRACT_ADDRESS / PRIVATE_KEY env vars).'
                 )
-                tx_base['contract_tx_hash'] = contract_tx_hash
-                tx_base['contract_chain'] = 'polygon-amoy'
-                tx_base['local_block_hash'] = local_block_hash
-                tx_base['block_index'] = block.index
-                tx_base['block_hash'] = block.hash
-                tx_base['verification_time'] = block.timestamp
-                tx_base['result_metadata'] = {
-                    'verdict': result,
-                    'similarity': match['similarity'],
-                    'threshold': match['threshold'],
-                    'matched': match['matched'],
-                }
-            except Exception as exc:
-                logger.warning('On-chain write skipped: %s', exc)
+            else:
+                try:
+                    # Mine the local block before submitting on-chain so the on-chain
+                    # record can reference the exact local block that carries it.
+                    tx, block = self.blockchain.record(tx_base)
+                    local_block_hash = block.hash
+                    contract_tx_hash = self.contract_bridge.submit_record(
+                        subject_id=subject_id,
+                        similarity=match['similarity'],
+                        result=result,
+                        probe_image_hash=digest,
+                        web_result_count=len(web_results or []),
+                        local_block_hash=local_block_hash,
+                    )
+                    tx_base['contract_tx_hash'] = contract_tx_hash
+                    tx_base['contract_chain'] = 'polygon-amoy'
+                    tx_base['local_block_hash'] = local_block_hash
+                    tx_base['block_index'] = block.index
+                    tx_base['block_hash'] = block.hash
+                    tx_base['verification_time'] = block.timestamp
+                    tx_base['result_metadata'] = {
+                        'verdict': result,
+                        'similarity': match['similarity'],
+                        'threshold': match['threshold'],
+                        'matched': match['matched'],
+                    }
+                except Exception as exc:
+                    on_chain_error = f'{type(exc).__name__}: {exc}'
+                    tx_base['on_chain_error'] = on_chain_error
+                    logger.warning('On-chain write skipped: %s', on_chain_error)
 
         tx, block = self.blockchain.record(tx_base)
         return {
@@ -193,6 +226,11 @@ class VerificationService:
             'transaction': tx,
             'block': block.to_dict(),
             'probe_path': stored_path,
+            'on_chain_submitted': contract_tx_hash is not None,
+            'contract_tx_hash': contract_tx_hash,
+            'contract_chain': 'polygon-amoy' if contract_tx_hash else None,
+            'on_chain_error': on_chain_error,
+            'on_chain_skipped_reason': on_chain_skipped_reason,
         }
 
     # -- richer local verification record -------------------------------------

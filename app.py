@@ -7,7 +7,7 @@ from datetime import datetime
 
 from flask import Flask, abort, jsonify, render_template, request, send_from_directory
 
-from config import BASE_DIR, FLASK_DEBUG, HOST, MAX_IMAGE_BYTES, PORT, ensure_dirs
+from config import BASE_DIR, FLASK_DEBUG, HOST, MAX_IMAGE_BYTES, PORT, PROBES_DIR, ensure_dirs
 from faceid.engine import FaceEngineError
 from services.verification_service import VerificationError, VerificationService
 
@@ -63,6 +63,44 @@ def handle_engine_error(exc):
     if request.path.startswith('/api/'):
         return jsonify({'ok': False, 'error': str(exc)}), 503
     return render_template('error.html', message=str(exc)), 503
+
+
+# ---------------------------------------------------------------------------
+# Demo page: one-click end-to-end pipeline run for the screen recording.
+# ---------------------------------------------------------------------------
+
+def _demo_samples() -> list:
+    """Return probe image files available on disk for the one-click demo."""
+    if not PROBES_DIR.exists():
+        return []
+    exts = ('.jpg', '.jpeg', '.png', '.webp')
+    files = sorted(p.name for p in PROBES_DIR.iterdir() if p.suffix.lower() in exts)
+    # Prefer explicit probe-named files over hash-named copies.
+    named = [f for f in files if 'probe' in f.lower() or 'obama' in f.lower()]
+    return named + [f for f in files if f not in named]
+
+
+@app.route('/demo')
+def demo_page():
+    samples = _demo_samples()
+    return render_template('demo.html', samples=samples, stats=service.dashboard_stats())
+
+
+@app.route('/demo/run', methods=['POST'])
+def demo_run():
+    """Run the full pipeline on a stored sample probe and return the outcome."""
+    samples = _demo_samples()
+    if not samples:
+        return jsonify({'ok': False, 'error': 'No sample probe images available. '
+                                                'Run an identify once, or add a probe under data/probes/.'}), 409
+    requested = (request.form.get('sample') or '').strip()
+    chosen = requested if requested in samples else samples[0]
+    image_bytes = (PROBES_DIR / chosen).read_bytes()
+    try:
+        outcome = service.identify(image_bytes)
+    except VerificationError as exc:
+        return jsonify({'ok': False, 'error': str(exc)}), 400
+    return jsonify({'ok': True, 'sample': chosen, **outcome})
 
 
 @app.route('/health')
@@ -232,6 +270,86 @@ def api_history(subject_id):
 @app.route('/api/history/<subject_id>/contract')
 def api_history_contract(subject_id):
     return jsonify({'ok': True, **service.verify_contract(subject_id)})
+
+
+API_REFERENCE = [
+    {
+        'group': 'Health & status',
+        'endpoints': [
+            {'method': 'GET', 'path': '/health',
+             'desc': 'Liveness probe with model and chain stats. Returns 503 when models are missing.',
+             'example': 'curl http://127.0.0.1:5000/health'},
+            {'method': 'GET', 'path': '/api/status',
+             'desc': 'Models, subject count, and ledger stats.',
+             'example': 'curl http://127.0.0.1:5000/api/status'},
+        ],
+    },
+    {
+        'group': 'Pipeline',
+        'endpoints': [
+            {'method': 'POST', 'path': '/api/register',
+             'desc': 'Enroll a face. multipart field image, or form field image_data (base64 data URL).',
+             'example': "curl -F 'name=Barack Obama' -F 'image=@face.jpg' http://127.0.0.1:5000/api/register"},
+            {'method': 'POST', 'path': '/api/identify',
+             'desc': 'Identify a probe: face match → reverse image search → local ledger + optional on-chain record.',
+             'example': "curl -F 'image=@probe.jpg' http://127.0.0.1:5000/api/identify"},
+            {'method': 'POST', 'path': '/demo/run',
+             'desc': 'Run the full pipeline on a stored sample probe (form field: sample). Used by the /demo page.',
+             'example': "curl -X POST -F 'sample=obama-probe.jpg' http://127.0.0.1:5000/demo/run"},
+        ],
+    },
+    {
+        'group': 'Ledger',
+        'endpoints': [
+            {'method': 'GET', 'path': '/api/chain',
+             'desc': 'Full local chain: stats plus every block.',
+             'example': 'curl http://127.0.0.1:5000/api/chain'},
+            {'method': 'GET', 'path': '/api/chain/validate',
+             'desc': 'Recompute all block hashes and links. Returns valid:false with details on tampering.',
+             'example': 'curl http://127.0.0.1:5000/api/chain/validate'},
+        ],
+    },
+    {
+        'group': 'History & on-chain verification',
+        'endpoints': [
+            {'method': 'GET', 'path': '/api/history/<subject_id>',
+             'desc': 'Subject metadata plus every FACE_REGISTRATION / FACE_VERIFICATION event.',
+             'example': 'curl http://127.0.0.1:5000/api/history/barack-obama-ee8f7c'},
+            {'method': 'GET', 'path': '/api/history/<subject_id>/contract',
+             'desc': 'Cross-check the local record hash against the on-chain recordHash on Polygon Amoy.',
+             'example': 'curl http://127.0.0.1:5000/api/history/barack-obama-ee8f7c/contract'},
+            {'method': 'GET', 'path': '/api/history/<subject_id>/export',
+             'desc': 'Download the full verification record set for a subject as JSON.',
+             'example': 'curl -O http://127.0.0.1:5000/api/history/barack-obama-ee8f7c/export'},
+        ],
+    },
+]
+
+
+@app.route('/api/docs')
+def api_docs():
+    return render_template('api_docs.html', groups=API_REFERENCE)
+
+
+@app.route('/api/history/<subject_id>/export')
+def api_history_export(subject_id):
+    """Download a subject's full verification record set as JSON."""
+    record = service.history(subject_id)
+    if record is None:
+        return jsonify({'ok': False, 'error': 'Unknown subject.'}), 404
+    verification_records = build_local_verification_records(record['events'])
+    payload = {
+        'ok': True,
+        'subject': record['subject'],
+        'verification_records': verification_records,
+        'events': record['events'],
+        'exported_at': datetime.now().isoformat(timespec='seconds'),
+    }
+    resp = jsonify(payload)
+    resp.headers['Content-Disposition'] = (
+        f'attachment; filename="{subject_id}-verification-records.json"'
+    )
+    return resp
 
 
 if __name__ == '__main__':

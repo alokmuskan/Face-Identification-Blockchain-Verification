@@ -323,9 +323,28 @@ To verify a past verification:
 
 ---
 
-## Phase 4: Deployment (2-5 days)
+## Phase 4: Richer Local Record + UI (implemented ✅)
 
-Make the project **live and accessible**.
+> Phase 4 was redefined with the approved decision: keep the deployed
+> `FaceVerificationHub` and the canonical record hash unchanged, and improve the
+> application around them. Full scope: `docs/phase4-roadmap.md`.
+
+**Done and verified:**
+- [x] Richer local verification records (probe/embedding hashes, block + tx
+      linkage, verdict metadata)
+- [x] Fixed `verify_contract()` cross-check (`local_block_hash` participates in
+      the canonical record hash)
+- [x] Cleaned history + on-chain verification UI
+- [x] `tests/test_phase4.py` + `/health` route test (26/26 passing)
+- [x] Deployment scaffolding: `Dockerfile`, `.dockerignore`, `.env.example`,
+      env-configurable `HOST`/`PORT`/`FLASK_DEBUG`
+
+---
+
+## Phase 5: Deployment (optional bonus, 1-2 days)
+
+Make the project **live and accessible**. Not required for the submission (the
+task says no live working link needed), but impressive for reviewers.
 
 ### 4.1 Backend deployment
 
@@ -391,52 +410,43 @@ PORT=5000
 
 ---
 
-## Phase 5: Polish & Presentation (ongoing)
+## Phase 6: Polish & Presentation (in progress)
 
 Things that make the project feel finished and professional.
 
-### 5.1 Better README
+### 5.1 Better README — done ✅
 
-Current README is good but could be better:
-- Add a **live demo screenshot** (once deployed)
-- Add a **pipeline diagram** (SVG, not ASCII)
-- Add **Architecture** section with a proper diagram
-- Add **Smart Contract** section (once deployed) with contract address and Polygonscan link
-- Add **API Reference** with example requests/responses
-- Add **Limitations & Future Work** section
-- Add **Team** section (names/roles if it's a team project)
+Rebuilt as a single clean document with architecture, workflow, smart-contract
+section, live proof values, and a "how to prove it again" guide.
 
-### 5.2 Add a /demo route
+### 5.2 Add a /demo route — done ✅
 
-A dedicated demo page that:
-- Shows a pre-loaded example (e.g., the Obama photo)
-- Has a "Run Demo" button that triggers the full pipeline
-- Shows results inline (no need to switch pages)
-- Good for screen recording and for letting judges try it
+One-click live demo page with an animated 5-step pipeline stepper
+(face scan → detect+embed → identity match → web search → ledger + on-chain),
+inline results and Polygonscan links.
 
-### 5.3 Add proper error handling & user feedback
+### 5.3 Add proper error handling & user feedback — done ✅
 
-- Flash messages in Flask (`flash()`)
-- Loading states during web search (show "Searching web..." with a spinner)
-- Better error messages (not just "something went wrong")
+- Loading states during web search (spinner + staged status lines on /identify)
+- Demo page reports on_chain_submitted / on_chain_error / skip reason explicitly
+- Better error messages throughout the pipeline
 
-### 5.4 Add batch / bulk operations
+### 5.4 Batch operations — partially done
 
-- Upload multiple images at once
-- Bulk identify against all enrolled subjects
-- Export results as CSV/JSON
+- [x] Export a subject's verification records as JSON
+      (`/api/history/<subject_id>/export`, attachment download)
+- [ ] Upload multiple images at once
+- [ ] Bulk identify
 
-### 5.5 Add a REST API docs page
+### 5.5 REST API docs page — done ✅
 
-Use Flask-RESTX or just a well-formatted Markdown page at `/api/docs` showing:
-- All endpoints
-- Request/response schemas
-- Example curl commands
-- Auth (if added)
+Rendered reference at `/api/docs` (nav: "API") listing every endpoint group
+with descriptions and curl examples.
+
 
 ---
 
-## Phase 6: Advanced Features (stretch goals, post-shortlist)
+## Phase 7: Advanced Features (stretch goals, post-shortlist)
 
 ### 6.1 Multiple face detection engines
 - Allow switching between YuNet, SSD, MTCNN, etc.
@@ -481,10 +491,11 @@ Use Flask-RESTX or just a well-formatted Markdown page at `/api/docs` showing:
 | 2.1 | Polygon smart contract | 3-5 days | VERY HIGH | If shortlisted, before final round |
 | 2.4 | Show Polygonscan verification | 1 day | VERY HIGH | With 2.1 |
 | 3.1-3.5 | Full on-chain architecture | 3-5 days | HIGH | After shortlist |
-| 4.1-4.4 | Deployment | 2-3 days | HIGH | After shortlist |
-| 5.1 | Better README | 1 day | Medium | Anytime |
-| 5.2 | /demo route | 1 day | Medium | Anytime |
-| 6.x | Stretch goals | varies | Low-Med | Post-shortlist |
+| 4.x | Richer local record + UI | done | HIGH | Completed ✅ |
+| 5.1-5.4 | Deployment (Docker/PaaS) | 1-2 days | Medium | Optional bonus |
+| 6.1 | Better README | 1 day | Medium | Anytime |
+| 6.2 | /demo route | 1 day | Medium | Anytime |
+| 7.x | Stretch goals | varies | Low-Med | Post-shortlist |
 
 ---
 

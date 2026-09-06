@@ -30,6 +30,37 @@ _ABI_PATH = (
     / "FaceVerificationHub.abi.json"
 )
 
+# Cached 4-byte selector of the 7-arg createRecord overload (the variant that
+# accepts a localBlockHash for traceability). Older deployments of the same
+# contract only expose the 6-arg overload.
+_LBAH_SELECTOR_CACHE: Optional[bytes] = None
+
+
+def _create_record_lbah_selector() -> bytes:
+    """Return (and cache) the 4-byte selector of the 7-arg createRecord."""
+    global _LBAH_SELECTOR_CACHE
+    if _LBAH_SELECTOR_CACHE is None:
+        from eth_utils import keccak
+        _LBAH_SELECTOR_CACHE = bytes(
+            keccak(
+                text="createRecord(string,bytes32,uint256,string,string,uint256,bytes32)"
+            )[:4]
+        )
+    return _LBAH_SELECTOR_CACHE
+
+
+def deployed_contract_supports_local_block_hash(runtime_bytecode: bytes) -> bool:
+    """True when the deployed bytecode dispatches the 7-arg createRecord overload.
+
+    Used to stay compatible with the originally deployed FaceVerificationHub,
+    which predates the localBlockHash traceability overload: calling a missing
+    overload on-chain would revert and waste gas.
+    """
+    try:
+        return _create_record_lbah_selector() in bytes(runtime_bytecode)
+    except Exception:
+        return False
+
 
 def _load_abi() -> list:
     """Load the deployed contract ABI."""
@@ -171,6 +202,13 @@ class ContractBridge:
             abi=_load_abi(),
         )
 
+        # Feature-detect the localBlockHash overload against the deployed
+        # bytecode so submissions fall back to the legacy 6-arg createRecord
+        # when the deployed contract predates it.
+        self._supports_lbah = deployed_contract_supports_local_block_hash(
+            self._w3.eth.get_code(self._contract_address)
+        )
+
     # -------------------------------------------------------------------------
     # RECORD SUBMISSION
     # -------------------------------------------------------------------------
@@ -242,7 +280,7 @@ class ContractBridge:
         # 4. Prepare Solidity function call
         # ---------------------------------------------------------------------
 
-        if local_block_hash:
+        if local_block_hash and self._supports_lbah:
             func = self._contract.functions.createRecord(
                 subject_id,
                 record_hash,
@@ -253,6 +291,11 @@ class ContractBridge:
                 local_block_hash,
             )
         else:
+            if local_block_hash:
+                print(
+                    "Note: deployed contract predates the localBlockHash overload; "
+                    "the traceability hash is kept in the local ledger only."
+                )
             func = self._contract.functions.createRecord(
                 subject_id,
                 record_hash,
@@ -424,6 +467,10 @@ class ContractBridge:
         """
 
         self._ensure_web3()
+
+        # Skip the 2-arg read entirely on contracts without the overload.
+        if not getattr(self, "_supports_lbah", False):
+            return None
 
         try:
             record_hash, local_block_hash = self._contract.functions.getRecord(
