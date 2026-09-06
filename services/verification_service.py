@@ -195,23 +195,14 @@ class VerificationService:
                 break
         if verif is None:
             return {'ok': False, 'error': 'No local FACE_VERIFICATION record for this subject.'}
-        payload = {
-            'subject_id': verif.get('subject_id', subject_id),
-            'similarity': verif.get('similarity', 0.0),
-            'result': verif.get('result', ''),
-            'probe_image_hash': verif.get('probe_image_hash', ''),
-            'web_result_count': verif.get('web_search_count', 0),
-            'record_schema': 'v1',
-            'chain': 'polygon-amoy',
-        }
-        payload_bytes = json.dumps(payload, sort_keys=True, separators=(',', ':'), ensure_ascii=False).encode('utf-8')
-        # This is the same keccak256 value the contract stores as recordHash.
+        # compute_record_hash is the single source of truth for the canonical
+        # payload + its keccak256 hash. Don't reconstruct the payload bytes here.
         local_record_hash = compute_record_hash(
-            subject_id=payload['subject_id'],
-            similarity=payload['similarity'],
-            result=payload['result'],
-            probe_image_hash=payload['probe_image_hash'],
-            web_result_count=payload['web_result_count'],
+            subject_id=verif.get('subject_id', subject_id),
+            similarity=verif.get('similarity', 0.0),
+            result=verif.get('result', ''),
+            probe_image_hash=verif.get('probe_image_hash', ''),
+            web_result_count=verif.get('web_search_count', 0),
         )
         on_chain_hash = self.contract_bridge.get_record_hash(subject_id)
         # Compare the LOCAL payload hash against the on-chain record hash.
