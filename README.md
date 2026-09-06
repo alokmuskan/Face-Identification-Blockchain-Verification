@@ -1,932 +1,869 @@
 # Face Identification & Blockchain Verification
 
-A pipeline that takes a face scan as input, identifies matching content on the
-web/social media, and then verifies that discovered data using a blockchain —
-end to end.
+![Python](https://img.shields.io/badge/Python-3.11+-3776AB?logo=python&logoColor=white)
+![Flask](https://img.shields.io/badge/Flask-3.x-000000?logo=flask&logoColor=white)
+![OpenCV](https://img.shields.io/badge/OpenCV-YuNet%20%2B%20SFace-5C3EE8?logo=opencv&logoColor=white)
+![Selenium](https://img.shields.io/badge/Search-Yandex%20Reverse%20Image-43B02A)
+![Solidity](https://img.shields.io/badge/Solidity-%5E0.8.20-363636?logo=solidity&logoColor=white)
+![Polygon](https://img.shields.io/badge/Chain-Polygon%20Amoy%20Testnet-8247E5?logo=polygon&logoColor=white)
+![Tests](https://img.shields.io/badge/Tests-36%20passing-brightgreen)
+
+A pipeline that takes a face scan, identifies the person against enrolled
+subjects, runs a **genuine reverse-image search** on the web to discover where
+that face appears, and anchors the discovered evidence to the **Polygon Amoy
+testnet** as a tamper-evident on-chain record — end to end.
 
 ```
-Face scan input → Web/social media search (find matching post)
-→ Blockchain upload/verification of the discovered data
+Face scan input → Face identification → Web/social media search → Blockchain upload/verification
 ```
 
 ---
 
 ## Table of contents
 
-- [What the project does](#what-the-project-does)
-- [Task origin and submission requirements](#task-origin-and-submission-requirements)
-- [Architecture](#architecture)
-- [Workflow](#workflow)
-- [Pipeline diagram](#pipeline-diagram)
-- [Dual blockchain model](#dual-blockchain-model)
-- [Local ledger](#local-ledger)
-- [On-chain smart contract](#on-chain-smart-contract)
-- [Canonical record hash](#canonical-record-hash)
-- [Current live deployment](#current-live-deployment)
-- [How to prove it again](#how-to-prove-it-again)
-- [Phase 4 — richer local record + deployment](#phase-4--richer-local-record--deployment)
-- [Project structure](#project-structure)
-- [How to run](#how-to-run)
-- [Web UI](#web-ui)
-- [JSON API](#json-api)
-- [Reverse image search details](#reverse-image-search-details)
-- [Configuration](#configuration)
-- [Tests](#tests)
-- [Tamper demo](#tamper-demo)
-- [Known limitations](#known-limitations)
-- [Security and privacy](#security-and-privacy)
-- [Recording and submission](#recording-and-submission)
-- [Roadmap](#roadmap)
+1. [Overview and problem statement](#overview-and-problem-statement)
+2. [Why blockchain](#why-blockchain)
+3. [Key features](#key-features)
+4. [System architecture](#system-architecture)
+5. [End-to-end verification workflow](#end-to-end-verification-workflow)
+6. [Face identification and matching](#face-identification-and-matching)
+7. [Reverse image search and evidence flow](#reverse-image-search-and-evidence-flow)
+8. [Canonical record and Keccak-256 hashing](#canonical-record-and-keccak-256-hashing)
+9. [Local vs on-chain data](#local-vs-on-chain-data)
+10. [Smart contract](#smart-contract)
+11. [Blockchain proof example](#blockchain-proof-example)
+12. [Repository structure](#repository-structure)
+13. [Technology stack](#technology-stack)
+14. [Installation](#installation)
+15. [Environment variables](#environment-variables)
+16. [Running the application](#running-the-application)
+17. [Using the system](#using-the-system)
+18. [HTTP API](#http-api)
+19. [Blockchain verification procedure](#blockchain-verification-procedure)
+20. [Security considerations](#security-considerations)
+21. [Privacy and biometric considerations](#privacy-and-biometric-considerations)
+22. [Limitations](#limitations)
+23. [Testing and validation](#testing-and-validation)
+24. [Implementation status](#implementation-status)
+25. [Architectural decisions](#architectural-decisions)
+26. [Roadmap](#roadmap)
+27. [Troubleshooting](#troubleshooting)
+28. [FAQ](#faq)
+29. [License and references](#license-and-references)
 
 ---
 
-## What the project does
+## Overview and problem statement
 
-This project takes **one face image** and runs it end to end:
+Face-matching systems produce a *score*, and scores are easy to dispute after
+the fact: someone can alter the stored record, re-run the comparison, or claim
+the evidence was fabricated. This project answers two questions at once:
 
-1. **Face detection & encoding** — YuNet finds the largest face, SFace produces a
-   128-d embedding.
-2. **Face identification** — the embedding is matched against enrolled subjects
-   using cosine similarity; a `VERIFIED` / `REJECTED` verdict is recorded.
-3. **Web / social media search** — when a match is found, the probe image is
-   uploaded to a headless Yandex Images reverse-image search over a
-   Selenium-driven Chrome browser. Matching URLs (social media posts, image hosts,
-   blogs) are extracted and classified by page type.
-4. **Blockchain verification** — the face verification result **and the web search
-   results** are mined as a transaction into a SHA-256 hash-chained, proof-of-work
-   local ledger. The chain is re-validated on demand: any tampered transaction
-   breaks the hash chain.
-5. **On-chain record** — the same canonical verification payload is also written
-   to a live smart contract on Polygon Amoy, so the local ledger and the public
-   chain can be cross-verified.
-6. **Demo script** — `tools/demo_pipeline.py` drives the whole pipeline from the
-   command line and prints a readable transcript suitable for screen recording.
+1. **Where does this face appear on the web?** — a scripted reverse-image
+   search (Yandex Images via headless Chrome) finds real pages and social
+   media posts containing the same face.
+2. **Can anyone prove, later, that this exact evidence existed and was not
+   altered?** — the pipeline computes a Keccak-256 fingerprint of the
+   verification record and writes it to a smart contract on a public testnet,
+   where it becomes immutable and publicly checkable on Polygonscan.
 
----
+The local ledger additionally demonstrates hash-chained tamper evidence with
+proof-of-work, and every verification event is re-verifiable both locally and
+against the on-chain record.
 
-## Task origin and submission requirements
-
-This repo was built for the **HH Goa 2026 Shortlisting Task 3**:
-Face Identification & Blockchain Verification.
-
-Technical requirements from the task:
-
-1. **Face identification** — detect and encode a face from an input image.
-2. **Social media / web search** — use the face to search the web and find at
-   least one real, matching social media post. This must be a genuine search step,
-   not a hardcoded result.
-3. **Blockchain verification** — once a matching post is found, upload the post or
-   a hash/fingerprint of it to a blockchain to create a verifiable, tamper-evident
-   record. Any blockchain may be used, as long as you can demonstrate
-   re-verifying the data against the on-chain record.
-4. **No website required** — focus on the pipeline itself.
-5. **GitHub repo required** — full source code in a GitHub repo, with a README
-   covering what the project does, how to run it, which blockchain you used, and
-   any known limitations.
-
-Submission requirements:
-
-- GitHub repo link
-- A screen recording of the working project (no live working link required)
-- Submission form link:
-  https://forms.gle/oZbQGuwiNeHVcHWo8
-- No resubmissions are allowed — submit only when the build is final.
-
-Screen recording:
-
-- Record your screen showing the pipeline working end to end:
-  face scan → social post found → blockchain upload/verification.
-- No editing or production needed — a plain screen recording is enough.
-- Upload it anywhere (YouTube unlisted, Google Drive, Loom, etc.) and share a
-  working link.
-
-Timeline:
-
-- Task launch: August 31, 2026
-- Deadline: Sept 7, 2026, 11:59 PM
+> **What the blockchain proves — and what it does not.**
+> The on-chain record proves the **integrity and timestamp** of the recorded
+> verification data: the similarity score, the probe image hash, the result,
+> and the number of web results that were found. It does **not** prove that the
+> identified person is genuinely that person in the real world. A cosine
+> similarity of 0.9999 is a strong *biometric match signal*, not absolute
+> proof of identity.
 
 ---
 
-## Architecture
+## Why blockchain
 
-The system has three logical layers:
+| Without blockchain | With this project's on-chain anchor |
+|---|---|
+| Stored verdicts can be edited silently | The record hash is immutable once written |
+| "When was this recorded?" is unanswerable | Block timestamp + tx hash answer it publicly |
+| Reviewers must trust the operator | Anyone can re-verify on Polygonscan, no access needed |
+| Local files are the only evidence | A public, independent copy of the fingerprint exists |
 
-1. **Face layer**
-   - Input: raw image bytes from upload or camera capture.
-   - Detection: YuNet face detector.
-   - Recognition: SFace face recognizer.
-   - Output: 128-d embedding.
-
-2. **Identity + search layer**
-   - Matching: cosine similarity against enrolled subjects.
-   - Web search: reverse image search via Yandex Images when there is a match.
-   - Classification: each result is labeled as `social_media`, `image_host`,
-     `blog`, or `web`.
-
-3. **Verification layer**
-   - Local blockchain: a SHA-256 hash-chained, proof-of-work ledger in
-     `data/ledger.json`.
-   - On-chain bridge: optional integration with `FaceVerificationHub` on Polygon
-     Amoy.
-   - Verification endpoints: local chain integrity and on-chain cross-check.
-
-Key design choices:
-
-- The local ledger is the demo backbone. It shows tamper evidence through hash
-  chaining and proof of work.
-- The on-chain bridge is optional. When configured, the same canonical payload
-  that is written locally is also hashed with Keccak-256 and submitted to the
-  smart contract.
-- The web search is never allowed to block the pipeline. If the browser cannot
-  start or no results are returned, the pipeline still records the attempt locally
-  (and on-chain when the bridge is configured).
+The local ledger remains the fast, private working layer; the smart contract is
+the public anchor. Both are bound to the **same Keccak-256 hash**, so altering
+the local data after submission breaks the match (demonstrated in
+[Blockchain verification procedure](#blockchain-verification-procedure)).
 
 ---
 
-## Workflow
+## Key features
 
-### Step 1 — Accept the face scan
-
-The app accepts:
-
-- a multipart file upload, or
-- a base64 data URL captured from the browser camera canvas
-
-The image is validated and size-limited before any processing.
-
-### Step 2 — Detect and encode the face
-
-- The image is decoded with OpenCV.
-- YuNet detects faces and selects the largest one.
-- SFace produces a 128-d embedding for that face.
-
-If no face is detected, the request is rejected with a clear error.
-
-### Step 3 — Identify the subject
-
-The embedding is matched against enrolled subjects using cosine similarity.
-
-- If the best similarity is above the threshold, the result is `VERIFIED` and the
-  matched subject is identified.
-- Otherwise, the result is `REJECTED`.
-
-### Step 4 — Run the web / social media search
-
-When there is a match:
-
-- the probe image is uploaded to Yandex Images through a headless Chrome browser
-- matching result cards are extracted
-- each result is classified by page type
-
-If there is no match, or if the search fails, the pipeline still proceeds.
-
-### Step 5 — Record the result locally
-
-The face verification result, probe image hash, embedding hash, similarity, and
-any discovered web results are written as a transaction into the local
-hash-chained ledger. Each verification event also stores richer local metadata:
-`block_index`, `block_hash`, `contract_tx_hash`, and `local_block_hash` when the
-on-chain bridge wrote a record (Phase 4).
-
-### Step 6 — Optionally record the result on-chain
-
-When the on-chain bridge is configured and the result is a match, the same
-canonical payload is:
-
-- hashed with Keccak-256
-- submitted to `FaceVerificationHub` on Polygon Amoy
-- cross-linked back to the local block via `contract_tx_hash` and
-  `local_block_hash`
-
-### Step 7 — Verify
-
-Two independent verification paths are available:
-
-- **Local integrity**: re-hash every block and check links and proof of work.
-- **On-chain cross-check**: recompute the canonical payload hash locally and
-  compare it to the on-chain `recordHash`.
+- **Face detection + encoding** — YuNet detector and SFace 128-d embeddings
+  (OpenCV DNN, ONNX models), cosine-similarity matching against enrolled
+  subjects, upload *or* live camera capture.
+- **Genuine reverse-image search** — the probe image is uploaded to Yandex
+  Images through headless Chrome (Selenium). Results are real, classified as
+  `social_media` / `image_host` / `blog` / `web`, cached per image for one
+  hour, and retried on transient failures. No API key and no pre-picked
+  results.
+- **Local proof-of-work ledger** — SHA-256 hash-chained blocks (difficulty 4)
+  with full verification metadata; `validate_chain()` detects any tampering.
+- **On-chain records on Polygon Amoy** — canonical JSON payload → Keccak-256 →
+  `FaceVerificationHub.createRecord(...)`; re-verification via
+  `verifyRecord(...)`.
+- **One-click live demo** — `/demo` runs the whole pipeline on a stored probe
+  with an animated stepper and Polygonscan links (built for screen recordings).
+- **Transparent status reporting** — every run reports
+  `on_chain_submitted` / `on_chain_error` / a precise skip reason. The pipeline
+  never fails silently.
+- **JSON proof export** — `/api/history/<subject_id>/export` downloads a
+  subject's full verification record set as a JSON attachment.
+- **36 passing tests** covering the face engine, ledger tamper evidence,
+  canonical hash reproducibility, and every HTTP route.
 
 ---
 
-## Pipeline diagram
+## System architecture
 
-```
-Face scan (image bytes)
-      │
-      ▼
-[ Image validation ]
-      │
-      ▼
-[ YuNet  ] → detect largest face
-      │
-      ▼
-[ SFace  ] → 128-d embedding
-      │
-      ▼
-[ FaceStore ] → cosine-similarity match vs enrolled subjects
-      │
-      ├─ NOT matched → REJECTED, recorded locally (no web search)
-      │
-      ▼ MATCHED
-[ WebSearchEngine (Selenium + Chrome headless) ]
-      │   upload probe image to Yandex Images
-      │   extract matching URLs
-      │   classify social_media / image_host / blog / web
-      ▼
-[ Local blockchain ] → FACE_VERIFICATION tx + web_search_results[]
-                         mined into SHA-256 hash chain
-      │
-      ▼
-[ On-chain bridge ] → Keccak-256 payload hash submitted to
-                        FaceVerificationHub on Polygon Amoy
-      │
-      ▼
-[ Verification ]
-   ├── local: validate_chain()
-   └── on-chain: local_record_hash == on-chain recordHash
+```mermaid
+flowchart TD
+    subgraph Client["Browser (Flask templates + capture.js)"]
+        UI["Upload / camera capture<br/>Dashboard · Live Demo · Ledger · Verify"]
+    end
+
+    subgraph FlaskApp["Flask app (app.py)"]
+        Routes["HTTP routes + JSON API"]
+        SVC["VerificationService<br/>(services/verification_service.py)"]
+    end
+
+    subgraph FaceID["faceid"]
+        Engine["FaceEngine<br/>YuNet detect → SFace 128-d embed"]
+        Store["FaceStore<br/>enrolled subjects (data/face_store.json)"]
+    end
+
+    subgraph Search["websearch"]
+        WS["WebSearchEngine<br/>Yandex Images via headless Chrome"]
+        Cache["Per-image cache<br/>(data/webcache, 1h TTL)"]
+    end
+
+    subgraph Chain["blockchain"]
+        Ledger["Blockchain ledger<br/>SHA-256 PoW chain (data/ledger.json)"]
+        Keccak["_keccak.py<br/>canonical payload → Keccak-256"]
+        Bridge["ContractBridge<br/>web3.py (optional)"]
+    end
+
+    subgraph Polygon["Polygon Amoy testnet"]
+        Contract["FaceVerificationHub<br/>0x7fc71404Ce10f84B5C467AB3c9806507D422fEf4"]
+    end
+
+    UI --> Routes --> SVC
+    SVC --> Engine --> Store
+    SVC --> WS --> Cache
+    SVC --> Ledger
+    SVC --> Keccak --> Bridge --> Contract
+    Bridge -. "read: getRecord / verifyRecord" .-> Contract
 ```
 
 ---
 
-## Dual blockchain model
+## End-to-end verification workflow
 
-This project uses two complementary verification layers:
+```mermaid
+flowchart TD
+    A["Input image<br/>(upload or camera)"] --> B["Face detection (YuNet)<br/>+ SFace embedding"]
+    B --> C{"Cosine similarity<br/>≥ 0.363?"}
+    C -- "no" --> R["REJECTED<br/>recorded in local ledger"]
+    C -- "yes" --> D["VERIFIED"]
+    D --> E["Reverse image search<br/>(Yandex, headless Chrome)"]
+    E --> F["Web evidence: URLs + titles<br/>+ page types (up to 10)"]
+    F --> G["Mine local PoW block<br/>(SHA-256 chain, difficulty 4)"]
+    G --> H["Canonical JSON payload"]
+    H --> I["Keccak-256 record hash"]
+    I --> J["createRecord(...) tx<br/>on Polygon Amoy"]
+    J --> K["contract_tx_hash stored<br/>in the local ledger block"]
+    K --> L["Re-verification:<br/>verifyRecord(subjectId, localHash) → true"]
+```
 
-1. **Local ledger**
-   - A SHA-256 hash-chained, proof-of-work ledger persisted as JSON.
-   - Demonstrates tamper evidence locally.
-   - Fast, offline, and fully under the control of the demo.
-
-2. **On-chain smart contract**
-   - A live, public, append-only registry on Polygon Amoy.
-   - Stores one Keccak-256 record hash per subject.
-   - Provides public proof that a specific local payload was submitted.
-
-These two layers are intentionally bound together. The important property is:
-
-- the same canonical record payload is used for both
-- the local payload hash is Keccak-256
-- the on-chain `recordHash` is Keccak-256 of the same canonical JSON bytes
-- the app re-verifies the local payload against the on-chain record
-
----
-
-## Local ledger
-
-The local ledger is a hash-chained, proof-of-work blockchain persisted as
-`data/ledger.json`.
-
-Each block contains:
-
-- index
-- timestamp
-- transactions
-- previous hash
-- nonce
-- block hash
-
-The block hash covers every field, including transactions, previous hash, and
-nonce.
-
-Proof of work:
-
-- each block hash must start with `DIFFICULTY` leading hex zeros
-- default difficulty is `4`
-- the nonce is incremented until the condition is satisfied
-
-Tamper evidence:
-
-- `validate_chain()` recomputes every block hash
-- it checks the proof-of-work requirement
-- it verifies that every block links to its predecessor
-- any altered transaction changes the block hash and breaks the chain
-
-This is a demo ledger. It demonstrates tamper evidence, not distributed consensus.
+If the on-chain bridge is not configured, the on-chain steps are skipped and
+the run is reported with a precise `on_chain_skipped_reason` — the local ledger
+still records the event, and the app says exactly why the write did not happen.
 
 ---
 
-## On-chain smart contract
+## Blockchain / hash verification flow
 
-Contract: `FaceVerificationHub`
-
-File: `contracts/FaceVerificationHub.sol`
-
-A minimal, append-only registry that binds a face-verification **record hash** to a
-subject id.
-
-Stored fields:
-
-- `subjectId`
-- `recordHash` — Keccak-256 of the canonical JSON record payload
-- `similarity` — stored as `round(similarity * 1_000_000)`
-- `result` — `VERIFIED` or `REJECTED`
-- `probeImageHash` — SHA-256 of the probe image
-- `webResultCount` — number of reverse-image results found
-- `localBlockHash` — optional bytes32 local ledger block hash attached to the
-  on-chain record so each on-chain record can be traced back to the local block
-  that carried the matching `contract_tx_hash` (Phase 3 traceability field)
-
-Solidity events:
-
-- `RecordCreated(...)` — emitted on every `createRecord(...)`
-- `RecordVerified(...)` — emitted by `verifyLatest(...)`
-
-Key functions:
-
-- `createRecord(...)` — create or overwrite the on-chain record for a subject
-- `getRecord(...)` — read the on-chain record hash for a subject, with an optional
-  two-field variant that also returns the attached local block hash
-- `verifyRecord(...)` — verify a subject's record against an expected hash
-
-This contract is deliberately small and focused. It is enough to demonstrate that a
-specific local payload was submitted and can be re-verified on-chain. The optional
-`localBlockHash` field adds traceability without changing the hash-first
-verification model.
-
-Deployment and bridge notes: `docs/SMART_CONTRACT.md`.
+```mermaid
+flowchart LR
+    P["Canonical JSON payload<br/>(sorted keys, compact separators)"] --> H["Keccak-256<br/>(eth-hash + pycryptodome)"]
+    H --> LH["Local record hash<br/>0x97189e29…0a456"]
+    H -- "createRecord(recordHash)" --> OH["On-chain recordHash<br/>0x97189e29…0a456"]
+    LH --> V{"verifyRecord(subjectId,<br/>localHash)"}
+    OH --> V
+    V -- "equal" --> M["on_chain_match: true"]
+    V -- "differ" --> T["Tamper detected:<br/>local payload was altered<br/>after submission"]
+```
 
 ---
 
-## Canonical record hash
+## Local vs on-chain data flow
 
-The tamper-evidence proof depends on using the same canonical payload everywhere.
-
-The canonical payload is built in one place:
-`blockchain/_keccak.py`.
-
-It includes:
-
-- `subject_id`
-- `similarity`
-- `result`
-- `probe_image_hash`
-- `web_result_count`
-- `record_schema`
-- `local_block_hash` (optional traceability field)
-- `chain`
-
-The payload is serialized with:
-
-- `sort_keys=True`
-- compact `separators`
-- `ensure_ascii=False`
-- UTF-8 encoding
-
-That makes the serialized bytes deterministic.
-
-The on-chain `recordHash` is:
-
-- `keccak256(canonical_payload_json_bytes(...))`
-
-Python uses the same Keccak-256 backend that Solidity uses for `keccak256()`:
-
-- preferred backend: `eth_hash`
-- fallback backend: `web3`
-
-This keeps the on-chain record hash computable even when `web3` is not installed.
+```mermaid
+flowchart TD
+    subgraph Local["Local layer (private, fast, editable files)"]
+        L1["Probe + enrollment images<br/>data/faces, data/probes"]
+        L2["SFace embedding vectors"]
+        L3["Ledger block: full tx JSON,<br/>web result URLs, contract_tx_hash"]
+        L4["Web cache (data/webcache)"]
+    end
+    subgraph OnChain["On-chain layer (public, immutable)"]
+        O1["subjectId (string)"]
+        O2["recordHash = Keccak-256 of canonical payload"]
+        O3["similarity (×1,000,000 integer)"]
+        O4["result · probeImageHash · webResultCount · recordSchema"]
+        O5["Block number + timestamp + tx hash + submitter"]
+    end
+    L3 -- "canonical payload → hash → tx" --> O2
+    O2 -- "verifyRecord()" --> L3
+```
 
 ---
 
-## Current live deployment
+## Face identification and matching
 
-The smart contract is deployed on **Polygon Amoy testnet**.
+- **Detection:** YuNet face detector (`models/face_detection_yunet_2023mar.onnx`),
+  score threshold `0.6`, detection side capped at 640 px for speed.
+- **Encoding:** SFace recognizer (`models/face_recognition_sface_2021dec.onnx`)
+  produces a 128-d embedding.
+- **Matching:** cosine similarity between the probe embedding and every stored
+  embedding of every enrolled subject; the best score wins. `VERIFIED` requires
+  `≥ 0.363` (OpenCV's recommended SFace threshold, `config.py`:
+  `MATCH_THRESHOLD`).
+- **Enrollment:** `/register` accepts an upload or a camera capture. A subject
+  accumulates up to 3 embeddings (from up to 3 images) and is identified by a
+  slug id such as `barack-obama-ee8f7c`.
+- **Storage:** `data/face_store.json` (gitignored). Only hashes — never images
+  or embeddings — leave the machine.
 
-Contract:
+Both models are downloaded by `python tools/fetch_models.py`.
 
-- `FaceVerificationHub`
-- Address: `0x7fc71404Ce10f84B5C467AB3c9806507D422fEf4`
-- Source: `contracts/FaceVerificationHub.sol`
-- ABI: `contracts/FaceVerificationHub.abi.json`
+---
 
-Latest verified submission:
+## Reverse image search and evidence flow
 
-- Subject ID: `barack-obama-ee8f7c`
-- Transaction hash: `0x0abb16c8429166476a85aa2606fb743404d264e98129fbf2938a6208c9ebb9ae`
-- Polygon block: `46874016`
-- Nonce: `10`
-- Gas used: `54270`
-- Status: `SUCCESS`
-- Similarity: `0.9999`
-- Web results: `10`
-- Local record hash:
-  `0x97189e2976e5009b8d221605aacb00398100d7974363eab455e6f006d970a456`
-- On-chain record hash:
-  `0x97189e2976e5009b8d221605aacb00398100d7974363eab455e6f006d970a456`
-- Local and on-chain hashes match exactly.
-- `verifyRecord(...)` returned `True`.
+`websearch/search.py` drives a real search, not a fixture:
+
+1. Headless Chrome (Selenium 4.6+, anti-automation flags) opens Yandex Images.
+2. The probe image is uploaded through the search-by-image file input.
+3. Result cards are scraped: destination URL, title, snippet, thumbnail URL.
+4. Each hit is classified by domain into `social_media`, `image_host`,
+   `blog`, or `web`.
+5. Up to 10 results are attached to the verification event and stored in the
+   local ledger transaction (`web_search_results`, `web_search_count`).
+
+Resilience details:
+
+- **Retry:** the upload flow is attempted twice per run (Yandex occasionally
+  serves a captcha or a slow first page).
+- **Cache:** results are cached on disk per SHA-256 of the probe bytes with a
+  1-hour TTL, so repeated demos of the same probe are instant. **Empty result
+  sets are never cached** — a transient failure is retried on the next run
+  instead of being persisted into the cache.
+- **Timeout:** 45 s per search (`config.py`: `WEB_SEARCH_TIMEOUT`).
+
+The search runs only when the face is matched, and its result count feeds the
+on-chain record (`webResultCount`).
+
+---
+
+## Canonical record and Keccak-256 hashing
+
+`blockchain/_keccak.py` is the **single source of truth** for the exact bytes
+that are hashed. The canonical payload is JSON with sorted keys, compact
+separators, and UTF-8 encoding:
+
+| Field | Meaning |
+|---|---|
+| `subject_id` | Subject slug, e.g. `barack-obama-ee8f7c` |
+| `similarity` | Full-precision cosine similarity (e.g. `0.9999`) |
+| `result` | `VERIFIED` or `REJECTED` |
+| `probe_image_hash` | SHA-256 hex of the probe image bytes |
+| `web_result_count` | Number of reverse-image results found |
+| `record_schema` | Schema version tag (`v1`) |
+| `chain` | `polygon-amoy` |
+| `local_block_hash` | Local ledger block hash — **included only when set** (keeps legacy records reproducible) |
+
+`recordHash = Keccak-256(canonical JSON bytes)` — the Ethereum Keccak-256
+variant, not SHA3-256, computed via `eth-hash` with the `pycryptodome`
+backend (web3 is a fallback). This hash is what `createRecord(...)` stores
+on-chain and what `verify_contract()` recomputes locally during
+re-verification.
+
+> Full-precision similarity lives in the hash. The contract stores a scaled
+> integer (`round(similarity × 1,000,000)`) for display; the hash binds the
+> exact value.
+
+---
+
+## Local vs on-chain data
+
+| Data | Local ledger (`data/ledger.json`) | On-chain (`FaceVerificationHub`) |
+|---|---|---|
+| Probe / enrollment images | ✅ stored locally | ❌ never leaves the machine |
+| Embedding vectors | ✅ (via their hash) | ❌ hash only, in the local tx |
+| Full web result URLs | ✅ in the tx JSON | ❌ count only |
+| Similarity | ✅ full precision | integer ×1e6 (hash binds full precision) |
+| Verdict + probe hash + result count | ✅ | ✅ |
+| Canonical record hash | ✅ recomputed | ✅ stored as `recordHash` |
+| Timestamp | block timestamp (local) | block timestamp (public) |
+| Tamper evidence | PoW hash chain | immutable, publicly auditable |
+| Who can check it | operator only | anyone via Polygonscan |
+
+---
+
+## Smart contract
+
+**Deployed contract (official public proof):**
+`FaceVerificationHub` — [`0x7fc71404Ce10f84B5C467AB3c9806507D422fEf4`](https://amoy.polygonscan.com/address/0x7fc71404Ce10f84B5C467AB3c9806507D422fEf4)
+on Polygon Amoy (chain id **80002**). Source: `contracts/FaceVerificationHub.sol`,
+ABI: `contracts/FaceVerificationHub.abi.json`.
+
+Functions used by the pipeline:
+
+| Function | Type | Purpose |
+|---|---|---|
+| `createRecord(subjectId, recordHash, similarity, result, probeImageHash, webResultCount[, localBlockHash])` | tx | Store/overwrite a subject's record hash; emits `RecordCreated` |
+| `getRecord(subjectId)` | view | Read the stored `recordHash` |
+| `getRecord(subjectId, includeLocalBlockHash)` | view | Read `recordHash` + `localBlockHash` |
+| `verifyRecord(subjectId, expectedHash)` | view | `true` when the stored hash equals `expectedHash` |
+| `verifyLatest(subjectId)` | tx | Re-verify the latest record; emits `RecordVerified` |
+| `recordCount()` | view | Number of records ever created |
+| `RECORD_SCHEMA()` | view | Record schema version (`v1`) |
+
+**Deployment-version note (important):** the contract *source* in this repo
+includes the newer overloads that accept a `localBlockHash` traceability
+field. The **currently deployed** instance predates those overloads. The
+Python bridge therefore **feature-detects** the 7-arg `createRecord` selector
+in the deployed runtime bytecode at startup:
+
+- overload present → the traceability field is attached on-chain;
+- overload absent (the current deployment) → the bridge falls back to the
+  legacy 6-arg `createRecord`, and the `local_block_hash` traceability is kept
+  in the local ledger only. No transaction ever reverts from calling a missing
+  overload.
+
+`createRecord` is currently un-gated so the demo pipeline can write records;
+gating submitter addresses is listed as future work.
+
+---
+
+## Blockchain proof example
+
+One verified, publicly checkable demonstration (values are from that specific
+execution, not generic claims about every run):
+
+| Field | Value |
+|---|---|
+| Subject ID | `barack-obama-ee8f7c` |
+| Similarity | `0.9999` |
+| Web results found | `10` |
+| Local record hash | `0x97189e2976e5009b8d221605aacb00398100d7974363eab455e6f006d970a456` |
+| On-chain record hash | `0x97189e2976e5009b8d221605aacb00398100d7974363eab455e6f006d970a456` |
+| Match | **exact** — `verifyRecord(...)` returned `true` |
+| Transaction | [`0x0abb16c8429166476a85aa2606fb743404d264e98129fbf2938a6208c9ebb9ae`](https://amoy.polygonscan.com/tx/0x0abb16c8429166476a85aa2606fb743404d264e98129fbf2938a6208c9ebb9ae) |
+| Polygon block | `46874016` |
+| Gas used | `54270` |
+| Status | `SUCCESS` |
 
 Public links:
 
-- Transaction on Polygonscan:
-  https://amoy.polygonscan.com/tx/0x0abb16c8429166476a85aa2606fb743404d264e98129fbf2938a6208c9ebb9ae
-- Contract on Polygonscan:
-  https://amoy.polygonscan.com/address/0x7fc71404Ce10f84B5C467AB3c9806507D422fEf4
-
-Phase 3 traceability:
-
-The deployed contract also supports an optional `localBlockHash` field. When a
-new record is submitted with the enriched pipeline, the app can show exactly which
-local ledger block the on-chain record points back to. The existing submission
-proof above stays unchanged because it was created before this field was added, so
-its `localBlockHash` is currently the zero bytes32. New enriched submissions will
-expose the full local <-> on-chain traceability linkage on public chains and in the
-app's on-chain verification page.
-
-Detailed proof and reproducibility notes:
-
-- `docs/onchain-proof.md`
-- `docs/recording-guide.md`
-- `docs/recording-plan.md`
-- `docs/phase3-roadmap.md`
-
-Never commit wallet private keys. The on-chain config lives in a local, gitignored
-`config_chain.py` and is supplied via environment variable.
+- Transaction: <https://amoy.polygonscan.com/tx/0x0abb16c8429166476a85aa2606fb743404d264e98129fbf2938a6208c9ebb9ae>
+- Contract: <https://amoy.polygonscan.com/address/0x7fc71404Ce10f84B5C467AB3c9806507D422fEf4>
 
 ---
 
-## How to prove it again
+## Repository structure
 
-If a reviewer or the submission form asks how to verify the on-chain claim, use one
-of these paths.
-
-### Option 1 — from the app
-
-1. Start the app:
-   `.venv/Scripts/python.exe app.py`
-2. Open the subject history:
-   `http://127.0.0.1:5000/history/barack-obama-ee8f7c`
-3. Query the on-chain cross-check:
-   `http://127.0.0.1:5000/api/history/barack-obama-ee8f7c/contract`
-
-Expected response shape:
-
-- `ok`
-- `local_record_hash`
-- `on_chain_record_hash`
-- `on_chain_match`
-- `contract_tx_hash`
-- `local_block_hash`
-- `on_chain_local_block_hash`
-- `local_block_index`
-- `local_block_hash_matches_on_chain`
-- `local_verification_record` (Phase 4 richer metadata)
-
-If the app is not running with the same configured bridge, the endpoint may return a
-bridge-not-configured message. In that case, use Option 2.
-
-### Option 2 — from Polygonscan
-
-1. Open the transaction link above.
-2. Confirm:
-   - status is successful
-   - block number is `46874016`
-   - the transaction interacts with contract `0x7fc71404Ce10f84B5C467AB3c9806507D422fEf4`
-3. Open the contract address on Polygonscan.
-4. Locate the stored record for subject `barack-obama-ee8f7c`.
-5. Confirm the stored `recordHash` equals
-   `0x97189e2976e5009b8d221605aacb00398100d7974363eab455e6f006d970a456`.
-
-### Option 3 — from the CLI bridge
-
-From the project root, with `config_chain.py` configured and `web3` installed:
-
-```bash
-.venv/Scripts/python.exe tools/contract.py verify \
-  --subject-id barack-obama-ee8f7c
+```
+.
+├── app.py                              # Flask app: pages, JSON API, /demo, /health
+├── config.py                           # Paths, thresholds, difficulty, HOST/PORT/FLASK_DEBUG
+├── pytest.ini                          # Test discovery scoped to tests/
+├── conftest.py                         # Makes the project root importable
+├── requirements.txt                    # Python dependencies
+├── Dockerfile                          # python:3.11-slim + Chrome + gunicorn
+├── .dockerignore
+├── .env.example                        # Env template (never commit a real .env)
+├── blockchain/
+│   ├── __init__.py
+│   ├── block.py                        # Block model; hash covers every field
+│   ├── ledger.py                       # PoW chain, validate_chain(), subject history
+│   ├── _keccak.py                      # Canonical payload + Keccak-256 (single source of truth)
+│   └── contract.py                     # ContractBridge: submit/read/verify on Polygon Amoy
+├── contracts/
+│   ├── FaceVerificationHub.sol         # Deployed contract source (Solidity ^0.8.20)
+│   └── FaceVerificationHub.abi.json    # ABI used by the Python bridge
+├── faceid/
+│   ├── engine.py                       # YuNet detection + SFace embedding
+│   ├── similarity.py                   # Cosine similarity
+│   └── store.py                        # Subject registry (embeddings, images)
+├── websearch/
+│   └── search.py                       # Yandex reverse-image search (Selenium)
+├── services/
+│   └── verification_service.py         # Pipeline orchestration + on-chain status
+├── static/
+│   ├── style.css                       # UI styling (dark theme, stepper, spinner)
+│   └── capture.js                      # Camera capture for register/identify
+├── templates/                          # Jinja2 pages (index, demo, identify, ledger, …)
+├── tests/
+│   ├── test_app.py                     # Route + API integration tests
+│   ├── test_blockchain.py              # Ledger, PoW, tamper detection
+│   ├── test_faceid.py                  # Similarity + store round-trips
+│   └── test_phase4.py                  # Record builder, hash reproducibility, cross-check
+├── tools/
+│   ├── demo_pipeline.py                # End-to-end CLI demo
+│   ├── tamper_demo.py                  # Visual tamper-evidence demonstration
+│   ├── export_onchain_proof.py         # Prints the full local + on-chain proof
+│   ├── contract.py                     # CLI: submit / verify / example-config
+│   ├── fetch_models.py                 # Downloads YuNet + SFace ONNX models
+│   ├── test_contract_connection.py     # Standalone bridge connectivity check
+│   ├── test_contract_write.py          # Standalone bridge write check
+│   └── config_chain.example.py         # Template for the gitignored config_chain.py
+└── docs/
+    ├── IMPLEMENTATION-STATUS.md        # Feature + phase delivery summary
+    ├── onchain-proof.md                # Public on-chain proof trail
+    ├── SMART_CONTRACT.md               # Contract notes
+    ├── recording-guide.md              # Screen-recording checklist
+    ├── recording-plan.md
+    ├── phase2-checklist.md
+    ├── phase3-roadmap.md
+    ├── phase4-roadmap.md
+    ├── ROADMAP.md                      # Full phased roadmap
+    └── DEPLOYMENT.md                   # Docker / PaaS deployment notes
 ```
 
-This should report the same on-chain `recordHash` and the same cross-check result.
-
-### Option 4 — print the full proof from the CLI
-
-```bash
-.venv/Scripts/python.exe tools/export_onchain_proof.py \
-  --subject-id barack-obama-ee8f7c
-```
-
-This prints the local record hash, on-chain record hash, cross-check result,
-local block index/hash, on-chain local block hash, contract tx hash, and
-Polygonscan links when available.
+Runtime directories (gitignored, created on first run): `data/` (ledger,
+face store, faces, probes, web cache) and `models/` (ONNX files).
 
 ---
 
-## Phase 4 — richer local record + deployment
+## Technology stack
 
-Phase 4 (see `docs/phase4-roadmap.md`) improves the application **around** the
-existing on-chain proof without changing the canonical payload or the deployed
-contract:
-
-- **Richer local verification records** — each `FACE_VERIFICATION` event stores
-  probe image hash, embedding hash, discovered posts, block index/hash, contract
-  tx hash, and `local_block_hash` (traceability).
-- **Fixed cross-check** — `verify_contract()` passes `local_block_hash` into the
-  canonical hash computation, so enriched records re-verify correctly against the
-  on-chain `recordHash`.
-- **Improved UI** — subject history and on-chain verification pages display the
-  richer record plus Polygonscan links.
-- **Deployment scaffolding** — `Dockerfile`, `.dockerignore`, `.env.example`, a
-  `/health` endpoint, and env-configurable `HOST` / `PORT` / `FLASK_DEBUG`.
-
-Run it in Docker:
-
-```bash
-docker build -t face-verify .
-docker run -p 5000:5000 face-verify
-```
-
-Full deployment guide: `docs/DEPLOYMENT.md`.
+| Layer | Technology |
+|---|---|
+| Language | Python 3.11+ |
+| Web | Flask 3.x, Jinja2 templates, vanilla JS (`capture.js`) |
+| Computer vision | OpenCV (`opencv-contrib-python`) DNN — YuNet + SFace ONNX |
+| Data / imaging | NumPy, Pillow |
+| Web search | Selenium 4.6+ driving Google Chrome headless against Yandex Images |
+| Local ledger | Custom SHA-256 proof-of-work chain (difficulty 4), JSON persistence |
+| Hashing | `eth-hash` (+ `pycryptodome` backend) for Keccak-256; `hashlib` for SHA-256 |
+| Blockchain | Solidity ^0.8.20, Polygon Amoy testnet (chain id 80002), web3.py bridge (optional install) |
+| Serving (Docker) | gunicorn, 2 workers, 120 s timeout |
+| Testing | pytest (36 tests) |
 
 ---
 
-## Project structure
+## Installation
 
-```
-app.py                          Flask web UI
-config.py                       Shared configuration
-requirements.txt                Python dependencies
-pytest.ini                      Pytest config (testpaths = tests)
-Dockerfile                      Container image (Chrome + gunicorn)
-.dockerignore                   Build-context excludes
-.env.example                    Documented env vars (secrets never committed)
+### 1. Prerequisites
 
-services/
-  verification_service.py       Workflow layer: register / identify / history
-blockchain/
-  __init__.py
-  block.py                      Block model and hashing
-  ledger.py                     Hash-chained PoW ledger
-  contract.py                   Optional on-chain bridge
-  _keccak.py                    Keccak-256 compatibility layer
-faceid/
-  __init__.py
-  engine.py                     YuNet detection + SFace embedding
-  similarity.py                 Cosine similarity helper
-  store.py                      Subject registry
-websearch/
-  __init__.py
-  search.py                     Headless reverse image search
-contracts/
-  FaceVerificationHub.sol       Smart contract source
-  FaceVerificationHub.abi.json  ABI for Python bridge
-tools/
-  fetch_models.py               Downloads YuNet + SFace ONNX models
-  demo_pipeline.py              End-to-end CLI demo / recording script
-  tamper_demo.py                Tamper-evidence demonstration
-  contract.py                   CLI for on-chain submit/verify
-  export_onchain_proof.py       Prints the full proof fields for a subject
-  config_chain.example.py       Template for local on-chain config
-tests/
-  test_app.py                   HTTP layer through the Flask test client
-  test_faceid.py                Face engine + similarity
-  test_blockchain.py            Ledger core
-  test_phase4.py                Phase 4 local record + cross-check
-  conftest.py
-data/                           Runtime data (git-ignored)
-  ledger.json
-  face_store.json
-  faces/
-  probes/
-models/                         Downloaded ONNX models (git-ignored)
-templates/                      Flask HTML templates
-static/                         CSS + JS
-docs/
-  SMART_CONTRACT.md
-  onchain-proof.md
-  recording-plan.md
-  recording-guide.md
-  phase2-checklist.md
-  phase3-roadmap.md
-  phase4-roadmap.md
-  DEPLOYMENT.md
-  ROADMAP.md
-```
+- Python 3.11+
+- Google Chrome installed (the reverse-image search drives it headlessly)
+- For on-chain features: a funded **Polygon Amoy testnet** wallet (faucet:
+  <https://faucet.polygon.technology/>)
 
----
+### 2. Create a virtual environment and install dependencies
 
-## How to run
-
-### 1. Set up the environment
+Windows:
 
 ```bash
 python -m venv .venv
-.venv/Scripts/python.exe -m pip install -r requirements.txt
-.venv/Scripts/python.exe tools/fetch_models.py
+.venv\Scripts\pip install -r requirements.txt
+# Optional on-chain bridge dependencies:
+.venv\Scripts\pip install web3 "eth-hash[pycryptodome]"
 ```
 
-`requirements.txt` includes the dependencies for:
-
-- Flask
-- OpenCV contrib (YuNet + SFace)
-- NumPy
-- Pillow
-- Playwright and Selenium for the web search
-- the optional on-chain bridge dependencies (kept commented: `eth-hash`, `web3`)
-
-The model fetcher downloads **YuNet** and **SFace** ONNX files into `models/`.
-
-### 2. Install Chrome or Chromium
-
-The web search module drives a headless Chrome via Selenium.
-
-- If Chrome is already installed, Selenium's driver manager usually picks it up.
-- Otherwise, install the matching Chromium/ChromeDriver, or configure the browser
-  path if needed.
-
-### 3. Run the pipeline demo
+Linux/macOS:
 
 ```bash
-.venv/Scripts/python.exe tools/demo_pipeline.py
+python3 -m venv .venv
+.venv/bin/pip install -r requirements.txt
+.venv/bin/pip install web3 "eth-hash[pycryptodome]"
 ```
 
-This will:
+> Note: the first line of `requirements.txt` is currently an invalid
+> requirement (`Flask web framework` instead of `flask>=3.0`). If
+> `pip install -r requirements.txt` rejects it, install the packages directly:
+> `pip install "flask>=3.0" "opencv-contrib-python>=4.10" "numpy>=1.26" "Pillow>=10.0" "pytest>=8.0" "selenium>=4.6"`.
+> See [Troubleshooting](#troubleshooting).
 
-- load or generate a probe image
-- run detection + embedding
-- identify or register a subject
-- run the reverse image search through Yandex
-- mine the result into the blockchain
-- validate the chain
-- print a step-by-step transcript
-
-You can also point it at your own photo:
+### 3. Download the face models
 
 ```bash
-.venv/Scripts/python.exe tools/demo_pipeline.py --probe mypic.jpg
+python tools/fetch_models.py
 ```
 
-### 4. Run the web UI
+This fetches `face_detection_yunet_2023mar.onnx` and
+`face_recognition_sface_2021dec.onnx` into `models/`.
+
+### 4. (Optional) configure the on-chain bridge
 
 ```bash
-.venv/Scripts/python.exe app.py
+cp tools/config_chain.example.py config_chain.py
+# then edit config_chain.py — it is gitignored
 ```
 
-Then open `http://127.0.0.1:5000`.
-
-### 5. Run with Docker
+### Docker alternative
 
 ```bash
-docker build -t face-verify .
-docker run -p 5000:5000 face-verify
+docker build -t face-chain-verify .
+docker run --rm -p 5000:5000 face-chain-verify
 ```
 
-The container installs Google Chrome, downloads the ONNX models at build time,
-and serves the app with gunicorn. See `docs/DEPLOYMENT.md` for PaaS/VPS options.
+The image bundles Chrome and gunicorn; models are fetched at build time.
 
 ---
 
-## Web UI
+## Environment variables
 
-The app exposes these pages:
+The Flask app itself:
 
-- **Dashboard** — subject count, block count, chain status, recent events, and the
-  pipeline diagram.
-- **Register** — type a name, upload a photo, or capture a camera frame.
-- **Identify** — submit a probe photo; the verdict, web-search hit list, and the
-  resulting block are shown.
-- **Ledger** — every block with its transactions, hashes, nonce, and embedded
-  web-search results.
-- **Verify** — one-click integrity check of the whole chain.
-- **History** — on-chain events for a subject, with the Phase 4 richer local
-  verification record and discovered posts.
-- **On-chain verification** — live local <-> on-chain cross-check with Polygonscan
-  links.
-- **Web results** — a dedicated view for the reverse-image search results attached
-  to a block.
+| Variable | Default | Purpose |
+|---|---|---|
+| `HOST` | `127.0.0.1` | Bind address (`0.0.0.0` in Docker/PaaS) |
+| `PORT` | `5000` | Bind port |
+| `FLASK_DEBUG` | `0` | `1` enables Flask debug mode |
+| `FCV_DATA_DIR` | `<repo>/data` | Overrides the data directory (used by tests) |
+
+On-chain bridge — preferred way is the gitignored `config_chain.py`
+(see `tools/config_chain.example.py`):
+
+| Key | Purpose |
+|---|---|
+| `POLY_AMOY_RPC` | RPC endpoint, e.g. `https://rpc-amoy.polygon.technology` |
+| `CONTRACT_ADDRESS` | Deployed `FaceVerificationHub` address |
+| `PRIVATE_KEY` | **Testnet-only** wallet key — never commit |
+| `CHAIN_ID` | `80002` |
+
+Deployment platforms that prefer env vars can instead set `WEB3_RPC_URL`,
+`CONTRACT_ADDRESS`, and `PRIVATE_KEY`; the bridge falls back to them when
+`config_chain.py` is missing or incomplete. See `.env.example`.
+
+**No secrets are stored in the repository.** `config_chain.py`, `.env`, and
+`data/` are gitignored.
 
 ---
 
-## JSON API
+## Running the application
 
+```bash
+python app.py
 ```
-GET  /api/status                                  models available, subject count, chain stats
-POST /api/register                                multipart form: name, image -> 201
-POST /api/identify                                multipart form: image -> verdict + block + web_results[]
-GET  /api/chain                                   full chain with all blocks
-GET  /api/chain/validate                          integrity report: valid, blocks_checked, errors
-GET  /api/history/<subject_id>                    subject record plus on-chain events
-GET  /api/history/<subject_id>/contract           on-chain cross-check: local_record_hash, on_chain_record_hash, on_chain_match, contract_tx_hash
-GET  /health                                      deployment liveness probe: status, models_available, blocks
+
+Then open <http://127.0.0.1:5000>. For Docker:
+
+```bash
+docker run --rm -p 5000:5000 face-chain-verify
 ```
+
+The app boots even without models or bridge config — `/health` reports
+`degraded` in that case instead of crashing.
+
+---
+
+## Using the system
+
+1. **Register a face** — `/register`: upload a photo or capture from the
+   camera. The subject is enrolled and the registration is mined into the
+   local ledger.
+2. **Identify** — `/identify`: submit a probe. The pipeline matches the face,
+   (on match) runs the reverse-image search, mines the ledger block, and — if
+   the bridge is configured — writes the record on-chain. A progress indicator
+   shows each stage; the search can take up to ~45 s.
+3. **Live demo** — `/demo`: one click runs the entire pipeline on a stored
+   sample probe (`obama-probe.jpg`), with an animated stepper and Polygonscan
+   links for the result. This is the page used for screen recordings.
+4. **Ledger** — `/ledger`: browse every block and transaction.
+5. **Verify** — `/verify`: full chain validation report (tamper evidence).
+6. **Subject history** — `/history/<subject_id>`: every event for a subject,
+   with probe/embedding hashes, discovered posts, and block linkage.
+7. **On-chain cross-check** — `/history/<subject_id>/contract`: local hash vs
+   on-chain hash, `verifyRecord()` result, tx hash, Polygonscan links.
+
+CLI alternatives:
+
+```bash
+python tools/demo_pipeline.py                    # end-to-end demo in the terminal
+python tools/demo_pipeline.py --probe path/to.jpg
+python tools/tamper_demo.py                      # tamper-evidence demonstration
+python tools/export_onchain_proof.py --subject-id barack-obama-ee8f7c
+python tools/contract.py verify --subject-id barack-obama-ee8f7c
+```
+
+---
+
+## HTTP API
+
+All routes as registered in `app.py`:
+
+| Method | Route | Purpose |
+|---|---|---|
+| GET | `/` | Dashboard (stats, subjects, recent events) |
+| GET | `/health` | Liveness probe; `503` when models are missing |
+| GET | `/api/status` | Models, subject count, ledger stats |
+| POST | `/api/register` | Enroll a face (`image` multipart file or `image_data` base64) |
+| POST | `/api/identify` | Full pipeline on a probe |
+| GET | `/demo` | One-click demo page |
+| POST | `/demo/run` | Run the pipeline on a stored sample (`sample` form field) |
+| GET | `/ledger` | Ledger page (HTML) |
+| GET | `/verify` | Chain-validation page (HTML) |
+| GET | `/api/chain` | Full chain: stats + every block |
+| GET | `/api/chain/validate` | Tamper-evidence validation report |
+| GET | `/history/<subject_id>` | Subject history page (HTML) |
+| GET | `/api/history/<subject_id>` | Subject events (JSON) |
+| GET | `/history/<subject_id>/contract` | On-chain cross-check page (HTML) |
+| GET | `/api/history/<subject_id>/contract` | On-chain cross-check report (JSON) |
+| GET | `/api/history/<subject_id>/export` | Download the subject's verification records as JSON |
+| GET | `/web-results/<int:block_index>` | Web results found in a specific block (HTML) |
+| GET | `/api/docs` | Rendered API reference |
+| GET | `/media/<path:relpath>` | Serves stored enrollment/probe images (local demo only) |
 
 Example:
 
 ```bash
-curl -F name=Alice -F image=@alice.jpg http://127.0.0.1:5000/api/register
-curl -F image=@probe.jpg http://127.0.0.1:5000/api/identify
+curl -F "image=@probe.jpg" http://127.0.0.1:5000/api/identify
 curl http://127.0.0.1:5000/api/chain/validate
-```
-
-The `/api/identify` response includes `web_results[]`, each with `url`, `title`,
-`description`, `image_url`, and `page_type`.
-
-The `/api/history/<subject_id>/contract` response includes:
-
-- `local_record_hash`
-- `on_chain_record_hash`
-- `on_chain_match`
-- `contract_tx_hash`
-- `local_block_hash`
-- `on_chain_local_block_hash`
-- `local_block_index`
-- `local_block_hash_matches_on_chain`
-- `local_verification_record` — the Phase 4 richer local record (probe hash,
-  embedding hash, discovered posts, verdict metadata)
-
----
-
-## Reverse image search details
-
-Engine: **Yandex Images** (`yandex.com/images`) via a headless Chrome driven by
-Selenium.
-
-The flow in headless mode:
-
-1. navigate to Yandex Images
-2. click the “Search by image” control
-3. upload the probe image through the file input
-4. wait for result cards
-5. extract the top 10 result URLs and classify each as `social_media`, `image_host`,
-   `blog`, or `web`
-
-No API key is required.
-
-Results are cached on disk per probe image hash (1-hour TTL), so repeated
-identify attempts for the same probe do not re-run the slow browser search during
-a demo.
-
-If the browser cannot start or no results are returned, the pipeline still records
-an **empty web-search result** locally (and on-chain when the bridge is
-configured). The face verification step is never blocked by a search failure.
-
-Known limitation: headless Chrome on some environments may need an explicit browser
-path or a manual ChromeDriver install. Web UI layouts also change, so selectors may
-need updating.
-
----
-
-## Configuration
-
-Key settings from `config.py`:
-
-```
-DIFFICULTY = 4                      leading hex zeros required per block
-MATCH_THRESHOLD = 0.363             SFace cosine threshold recommended by OpenCV
-MAX_EMBEDDINGS_PER_SUBJECT = 3
-MAX_IMAGES_PER_SUBJECT = 3
-WEB_SEARCH_TIMEOUT = 45             seconds given to the reverse-image search
-MAX_DETECT_SIDE = 640               probes are downscaled before detection
-MAX_IMAGE_BYTES = 10 MB
-HOST = 127.0.0.1                    overridable via env (deployment uses 0.0.0.0)
-PORT = 5000                         overridable via env
-FLASK_DEBUG = 0                     set to 1 for the dev server debug mode
-CONTRACT_ADDRESS = 0x7fc71404...    used to render Polygonscan links
-```
-
-Data layout:
-
-```
-data/
-  ledger.json
-  face_store.json
-  faces/
-  probes/
-models/
-  face_detection_yunet_2023mar.onnx
-  face_recognition_sface_2021dec.onnx
+curl http://127.0.0.1:5000/api/history/barack-obama-ee8f7c/contract
 ```
 
 ---
 
-## Tests
+## Blockchain verification procedure
 
-```bash
-.venv/Scripts/python.exe -m pytest -q
-```
+Anyone can re-verify the published record without access to this machine:
 
-The test suite covers:
+1. **Polygonscan (no setup):** open the
+   [transaction](https://amoy.polygonscan.com/tx/0x0abb16c8429166476a85aa2606fb743404d264e98129fbf2938a6208c9ebb9ae)
+   — status SUCCESS, block 46874016, interacting with
+   `0x7fc71404Ce10f84B5C467AB3c9806507D422fEf4`. On the contract page, read
+   `getRecord("barack-obama-ee8f7c")` and compare with
+   `0x97189e2976e5009b8d221605aacb00398100d7974363eab455e6f006d970a456`.
+2. **From the app:** `GET /api/history/barack-obama-ee8f7c/contract` →
+   `local_record_hash`, `on_chain_record_hash`, `on_chain_match: true`,
+   `contract_tx_hash`.
+3. **From the CLI:** `python tools/contract.py verify --subject-id barack-obama-ee8f7c`
+   (requires `config_chain.py` + web3), or
+   `python tools/export_onchain_proof.py --subject-id barack-obama-ee8f7c`
+   for the full local + on-chain + traceability proof.
 
-- blockchain core: genesis, mining, linking, tamper detection, persistence
-- similarity math
-- subject registry
-- HTTP layer through the Flask test client with an isolated data directory
-- Phase 4: richer verification record builder, bridge-off fallback, and the
-  `local_block_hash` cross-check; `/health` endpoint
-
-`pytest.ini` restricts collection to `tests/` so the standalone
-`tools/test_contract_*.py` scripts are not collected as tests.
-
----
-
-## Tamper demo
-
-The tamper demo shows that the local ledger is tamper-evident.
-
-```bash
-.venv/Scripts/python.exe tools/tamper_demo.py            # flip a recorded similarity
-.venv/Scripts/python.exe tools/tamper_demo.py --restore  # fresh chain
-```
-
-After tampering:
-
-- the Verify page and `/api/chain/validate` report the chain as INVALID
-- the offending block is named
-
-This makes the tamper-evidence claim concrete for the recording and the submission.
+**Tamper evidence in practice:** `tools/tamper_demo.py` modifies a copy of the
+ledger and shows `validate_chain()` flip to `valid: false`, because each block
+hash covers every field (transactions, previous hash, nonce). Likewise, any
+change to a submitted verification's data changes the Keccak-256 record hash
+and breaks the match with the on-chain `recordHash`.
 
 ---
 
-## Known limitations
+## Security considerations
 
-- The PoW ledger is local and single-writer. It demonstrates tamper evidence, not
-  distributed consensus or a public chain.
-- `data/` is git-ignored. It contains biometric data such as enrollment photos and
-  probes. Never commit or share it.
-- The web search requires a working headless Chrome. If it fails, the pipeline still
-  records the attempt on-chain but may not have live social-media links.
-- Models (YuNet and SFace) come from OpenCV Zoo and must be downloaded once with
-  `tools/fetch_models.py`.
-- Matching is against **enrolled subjects** only. The pipeline identifies a face,
-  then, only on a match, looks the probe up on the web.
-- The built-in Flask dev server is for local use only; the Docker image uses
-  gunicorn.
-- The on-chain contract currently stores one latest record per subject. For a longer
-  audit trail, a per-post append-only registry would be a natural extension.
-
----
-
-## Security and privacy
-
-This repo is built so that secrets never need to be committed.
-
-- Wallet private keys are supplied through a local `config_chain.py` or an
-  environment variable.
-- `config_chain.py` is gitignored.
-- Biometric images are stored under `data/`, which is gitignored.
-- The public proof files contain only public on-chain information: contract address,
-  transaction hash, block number, subject id, record hashes, and Polygonscan links.
-
-During recording, do **not** show:
-
-- wallet private keys
-- env files with secrets
-- `config_chain.py` contents
-
-Keep the on-chain proof public-only.
+- **Keys:** the wallet private key lives only in the gitignored
+  `config_chain.py` (or env vars). It must be a **testnet-only** key. Nothing
+  secret is committed.
+- **Contract gating:** the deployed `createRecord` is intentionally un-gated
+  for the demo; production use would restrict submitters (`msg.sender`
+  allowlist). `records[subjectId]` is latest-wins: a later submission
+  overwrites the subject's hash.
+- **Transport:** the demo binds to loopback; the Dockerfile exposes HTTP
+  without TLS — put a reverse proxy with HTTPS in front for any public
+  deployment.
+- **Search trust:** results come from a third-party search engine and are
+  stored as *discovered evidence*; the on-chain record binds the count and the
+  probe hash, not the continued availability of those URLs.
+- **`/media` route:** serves files under the project directory for the local
+  demo; disable it before any public deployment.
 
 ---
 
-## Recording and submission
+## Privacy and biometric considerations
 
-Two docs cover the recording:
+- Face images, probe images, and SFace embeddings stay in the local, gitignored
+  `data/` directory. **Only hashes and counts ever go on-chain.**
+- On-chain data (`subjectId`, similarity, result, probe-image hash, result
+  count) is public by design. The probe-image hash is a one-way fingerprint;
+  it does not expose the image.
+- **Biometric matching is probabilistic.** A similarity of `0.9999` against a
+  threshold of `0.363` is strong evidence of a *match to the enrolled
+  embedding*, not legal proof of identity. The blockchain proves the integrity
+  and timestamp of the recorded data — it does not independently confirm that
+  the identified person is that person.
+- Suitable only for demo/educational use; real deployments need consent
+  flows, retention limits, and applicable biometric-privacy compliance.
 
-- `docs/recording-plan.md` — short narrative + checklist
-- `docs/recording-guide.md` — full terminal walkthrough, expected output, tamper
-  demo, submission-form proof block
+---
 
-Recommended recording flow:
+## Limitations
 
-1. Open the dashboard.
-2. Run an identify with a probe image that has real web/social matches.
-3. Show the similarity, verdict, block, and hashes.
-4. Show the web/social results.
-5. Show the ledger block with `web_search_results`.
-6. Show the on-chain verification endpoint:
-   `/api/history/<subject_id>/contract`
-7. Optionally open the Polygonscan transaction or contract tab alongside the app.
-8. Optionally show the tamper demo and re-verification.
+- **Search fragility:** the Yandex flow depends on their live UI; selector
+  changes, captchas, or regional variants can degrade results (mitigated by a
+  retry, staged fallbacks, and caching — but not eliminated).
+- **Result variance:** result counts differ between runs and engines; the
+  cached count is what gets anchored on-chain for a given probe.
+- **Contract version:** the deployed instance predates the `localBlockHash`
+  overloads present in the source; the bridge feature-detects and keeps that
+  traceability locally for the current deployment.
+- **Latest-wins registry:** the contract stores one hash per subject (the most
+  recent submission), not a full history.
+- **Local ledger ≠ consensus:** the PoW chain demonstrates tamper evidence,
+  not distributed consensus; the public anchor is the Polygon record.
+- **Testnet:** Polygon Amoy is free and its history can in principle be
+  pruned; production anchors would use mainnet.
+- **Single-operator identity:** subject ids are self-registered slugs; nothing
+  on-chain attests that `barack-obama-ee8f7c` is the real person.
 
-Submission checklist:
+---
 
-- GitHub repo is public or accessible to the reviewers.
-- README explains the pipeline, the blockchains used, and the known limitations.
-- One screen recording shows face scan → web/social result → on-chain write → on-chain
-  verification.
-- The on-chain proof note matches what the recording shows.
-- No wallet private key is committed or visible in the recording.
+## Testing and validation
 
-Submission form:
+36 tests, all passing (`python -m pytest`):
 
-https://forms.gle/oZbQGuwiNeHVcHWo8
+| Suite | Covers |
+|---|---|
+| `tests/test_faceid.py` | Cosine similarity math, store round-trips, match/no-match, embedding cap, persistence |
+| `tests/test_blockchain.py` | Genesis validity, PoW difficulty, block linking, **tamper detection**, subject history, hash sensitivity to every field |
+| `tests/test_app.py` | Every page and API route, error paths (missing image, faceless image), demo fallbacks, export headers |
+| `tests/test_phase4.py` | Verification-record builder, bridge-off fallback, `local_block_hash` cross-check, **canonical hash reproducibility of the published on-chain proof**, chain-config precedence, deployed-bytecode feature detection |
+
+Manual/live validation performed during development:
+
+- End-to-end `/demo` run: `VERIFIED`, similarity `1.0` / `0.9999`, 10 real web
+  results, block mined, tx confirmed on Polygon Amoy (see
+  [proof example](#blockchain-proof-example)).
+- Live re-verification: `verify_contract()` returns `on_chain_match: true`
+  with the exact documented hash.
+- Tamper demo: altered ledger copy → `valid: false`.
+
+---
+
+## Implementation status
+
+- ✅ Face detection + encoding + matching (YuNet + SFace)
+- ✅ Genuine reverse-image search with retry + non-empty-cache policy
+- ✅ Local PoW ledger with tamper demo
+- ✅ Smart contract written, deployed on Polygon Amoy, integrated via web3
+- ✅ Canonical Keccak-256 record hash (single source of truth)
+- ✅ On-chain submission + re-verification (app, API, CLI)
+- ✅ One-click `/demo` page with stepper (recording-friendly)
+- ✅ Loading states, transparent on-chain status/skip reporting
+- ✅ `/api/docs`, JSON proof export, `/health`
+- ✅ Docker packaging (Chrome included), `.env.example`
+- ✅ 36 automated tests
+- ⚪ Live cloud hosting — scaffolding ready, intentionally not deployed (not
+  required by the task)
+- ⚪ Contract submitter gating, multi-engine search, batch uploads — future work
+
+---
+
+## Architectural decisions
+
+1. **Hash-first proof model.** Only a Keccak-256 fingerprint of the canonical
+   record goes on-chain — cheap, private, and sufficient for tamper evidence.
+2. **Single source of truth for hashing.** `blockchain/_keccak.py` is the only
+   place that builds the canonical payload; both submission and
+   re-verification call it, eliminating drift.
+3. **Keccak-256 (Ethereum variant), not SHA3-256**, to match Solidity's
+   `keccak256` and keep the local hash byte-identical to the on-chain hash.
+4. **Local ledger stays.** Fast, private, demoable offline; cross-referenced
+   with the chain via `contract_tx_hash` (and `local_block_hash` where the
+   deployment supports it).
+5. **Feature-detect the deployment.** The bridge inspects the deployed runtime
+   bytecode and adapts (7-arg vs 6-arg `createRecord`), so the published proof
+   is never invalidated by source-level contract evolution.
+6. **Graceful degradation everywhere.** Missing models → `/health: degraded`;
+   missing bridge → local-only run with an explicit skip reason; failed search
+   → run continues with zero results, never cached.
+7. **The deployed `FaceVerificationHub` remains the official public proof.**
+   Later improvements (richer local records, traceability fields) live in the
+   application layer and do not change the canonical payload for existing
+   records.
 
 ---
 
 ## Roadmap
 
-Phase plans are tracked in:
+- [ ] Gate `createRecord` to authorized submitter addresses (would be a fresh
+      deployment, not a mutation of the current proof)
+- [ ] Store a per-subject history on-chain (events instead of latest-wins)
+- [ ] Multi-engine search aggregation (Bing / Google Lens) with per-engine
+      evidence
+- [ ] Batch identify + CSV/JSON bulk export
+- [ ] Live cloud deployment (Docker image is ready for Render/Railway/VPS)
+- [ ] Optional post-content enrichment for discovered social posts via
+      platform APIs
 
-- `docs/phase3-roadmap.md` — stronger on-chain trace + live re-verification UI
-- `docs/phase4-roadmap.md` — richer local record + UI + deployment (implemented)
-- `docs/ROADMAP.md` — full multi-phase plan (UI polish, deployment, advanced
-  features)
+---
 
-Possible extensions after shortlisting:
+## Troubleshooting
 
-- Make the on-chain record a per-post append-only registry instead of one record per
-  subject
-- Submit the actual discovered post fingerprint more explicitly, not just the search
-  count
-- Add a live re-verification button that queries the contract during the demo
-- Improve the UI theme and add a dedicated demo route for recording
-- Verify the contract source on Polygonscan
-- Add another subject and another on-chain record to show repeatability
-- Deploy the Flask app privately for a live walk-through
+| Symptom | Cause / fix |
+|---|---|
+| `pip install -r requirements.txt` fails with `InvalidRequirement` on `Flask web framework` | The first line of `requirements.txt` is a comment-like sentence rather than a valid requirement. Install the packages directly (see [Installation](#installation)) or change that line to `flask>=3.0`. |
+| `Could not start a headless browser` | Chrome is missing or a chromedriver mismatch. Install Google Chrome; Selenium 4.6+ auto-manages the driver. |
+| `No face detected` on a valid-looking photo | Face too small or low quality; use a frontal, well-lit image with the face ≥ ~100 px. |
+| `/health` reports `degraded` | ONNX models missing — run `python tools/fetch_models.py`. |
+| Demo shows "On-chain bridge not configured" | `config_chain.py` missing/empty or env vars unset. The run is local-only; configure the bridge for on-chain writes. |
+| `On-chain write failed: ...` | Fund the Amoy wallet (faucet), check RPC reachability, and confirm the contract address. The exact error is shown in the UI and logs. |
+| Web search returns 0 results | Usually a captcha or slow first page — run again (empty results are not cached). Check Chrome and network. |
+| `Cannot connect to RPC` | Public RPC hiccup — retry, or point `POLY_AMOY_RPC` at another Amoy RPC provider. |
+| Model download fails | Fetch manually (links inside `tools/fetch_models.py`) into `models/`. |
+
+---
+
+## FAQ
+
+**Which blockchain is used?**
+Polygon Amoy testnet (chain id 80002), contract
+[`0x7fc71404Ce10f84B5C467AB3c9806507D422fEf4`](https://amoy.polygonscan.com/address/0x7fc71404Ce10f84B5C467AB3c9806507D422fEf4).
+
+**Is the search real or scripted to fixed results?**
+Real. The probe image is uploaded to Yandex Images at run time via headless
+Chrome; whatever it returns is what gets recorded. Nothing is pre-picked.
+
+**What exactly goes on-chain?**
+A Keccak-256 hash of the canonical verification record (subject, similarity,
+result, probe-image hash, web-result count, schema, chain — plus the local
+block hash when supported), along with the display fields stored by
+`createRecord`. Images and embeddings never leave the machine.
+
+**Why Keccak-256 instead of SHA-256 for the record hash?**
+The Solidity contract compares against hashes computed with Ethereum's
+`keccak256`. Using the same function locally makes the local hash and the
+on-chain `recordHash` byte-identical. (The local *ledger* separately uses
+SHA-256 for its PoW chain.)
+
+**Does a match prove identity?**
+No. It proves a strong biometric similarity to the enrolled embeddings. The
+blockchain proves the recorded data has not been altered since submission —
+not that the person is who the label says.
+
+**Can I run it fully offline?**
+Face identification and the local ledger work offline. The web search needs
+internet, and on-chain features need an RPC connection.
+
+---
+
+## License and references
+
+- **License:** none added yet (the repository currently has no LICENSE file).
+- Contract source: `contracts/FaceVerificationHub.sol` (SPDX: MIT header).
+- OpenCV YuNet/SFace: <https://github.com/opencv/opencv_zoo>
+- Polygon Amoy: <https://polygon.technology/developers>
+- web3.py: <https://web3py.readthedocs.io/>
+- Selenium: <https://www.selenium.dev/>
+- Flask: <https://flask.palletsprojects.com/>
+
+---
+
+*Proof values in this README reflect the specific verified demo execution
+documented in `docs/onchain-proof.md`; new runs produce their own hashes and
+transaction hashes.*
