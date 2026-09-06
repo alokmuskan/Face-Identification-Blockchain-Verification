@@ -540,6 +540,123 @@ requirements.txt                Python dependencies
   recording-plan.md
   recording-guide.md
   phase2-checklist.md
+  phase3-roadmap.md
+```
+
+---
+
+## How to run
+
+### 1. Set up the environment
+
+```bash
+python -m venv .venv
+.venv/Scripts/python.exe -m pip install -r requirements.txt
+.venv/Scripts/python.exe tools/fetch_models.py
+```
+
+`requirements.txt` includes the dependencies for:
+
+- Flask
+- OpenCV contrib (YuNet + SFace)
+- NumPy
+- Pillow
+- Playwright and Selenium for the web search
+- the optional on-chain bridge dependencies
+
+The model fetcher downloads **YuNet** and **SFace** ONNX files into `models/`.
+
+### 2. Install Chrome or Chromium
+
+The web search module drives a headless Chrome via Selenium.
+
+- If Chrome is already installed, Selenium's driver manager usually picks it up.
+- Otherwise, install the matching Chromium/ChromeDriver, or configure the browser
+  path if needed.
+
+### 3. Run the pipeline demo
+
+```bash
+.venv/Scripts/python.exe tools/demo_pipeline.py
+```
+
+This will:
+
+- load or generate a probe image
+- run detection + embedding
+- identify or register a subject
+- run the reverse image search through Yandex
+- mine the result into the blockchain
+- validate the chain
+- print a step-by-step transcript
+
+You can also point it at your own photo:
+
+```bash
+.venv/Scripts/python.exe tools/demo_pipeline.py --probe mypic.jpg
+```
+
+### 4. Run the web UI
+
+```bash
+.venv/Scripts/python.exe app.py
+```
+
+Then open `http://127.0.0.1:5000`.
+
+---
+
+## Project structure
+
+```
+app.py                          Flask web UI
+config.py                       Shared configuration
+requirements.txt                Python dependencies
+.services/
+  verification_service.py       Workflow layer: register / identify / history
+.blockchain/
+  __init__.py
+  block.py                      Block model and hashing
+  ledger.py                     Hash-chained PoW ledger
+  contract.py                   Optional on-chain bridge
+  _keccak.py                    Keccak-256 compatibility layer
+.faceid/
+  __init__.py
+  engine.py                     YuNet detection + SFace embedding
+  similarity.py                 Cosine similarity helper
+  store.py                      Subject registry
+.websearch/
+  __init__.py
+  search.py                     Headless reverse image search
+.contracts/
+  FaceVerificationHub.sol       Smart contract source
+  FaceVerificationHub.abi.json  ABI for Python bridge
+.tools/
+  fetch_models.py               Downloads YuNet + SFace ONNX models
+  demo_pipeline.py              End-to-end CLI demo / recording script
+  tamper_demo.py                Tamper-evidence demonstration
+  contract.py                   CLI for on-chain submit/verify
+  export_onchain_proof.py       Prints the full Phase 3 proof fields for a subject
+  config_chain.example.py       Template for local on-chain config
+.tests/
+  test_app.py
+  test_faceid.py
+  test_blockchain.py
+  conftest.py
+.data/                          Runtime data (git-ignored)
+  ledger.json
+  face_store.json
+  faces/
+  probes/
+.models/                        Downloaded ONNX models (git-ignored)
+.templates/                     Flask HTML templates
+.static/                        CSS + JS
+.docs/
+  SMART_CONTRACT.md
+  onchain-proof.md
+  recording-plan.md
+  recording-guide.md
+  phase2-checklist.md
 ```
 
 ---
@@ -865,6 +982,7 @@ requirements.txt                Python dependencies
   recording-plan.md
   recording-guide.md
   phase2-checklist.md
+  phase3-roadmap.md
 ```
 
 ---
