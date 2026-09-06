@@ -457,6 +457,7 @@ class ContractBridge:
             return None
 
         return pair[1]
+
     def verify_record(
         self,
         subject_id: str,
