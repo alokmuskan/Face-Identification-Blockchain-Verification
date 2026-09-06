@@ -19,6 +19,9 @@ models/
 # Repowise local index cache
 .repowise/
 
+# Local on-chain bridge config (contains funded wallet private key)
+config_chain.py
+
 # VS Code / MCP local config
 .vscode/
 .mcp.json
