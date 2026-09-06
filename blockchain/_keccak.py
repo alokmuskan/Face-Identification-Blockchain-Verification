@@ -68,8 +68,8 @@ _CANONICAL_PAYLOAD_FIELDS = (
     "probe_image_hash",
     "web_result_count",
     "record_schema",
-    "local_block_hash",
     "chain",
+    "local_block_hash",  # present only when set (backward compatible with legacy records)
 )
 
 
@@ -93,16 +93,23 @@ def canonical_payload(
     ``local_block_hash`` is optional. When present, it ties the on-chain record
     to the local ledger block that carried the matching ``contract_tx_hash``.
     """
-    return {
+    payload = {
         "subject_id": subject_id,
         "similarity": similarity,
         "result": result,
         "probe_image_hash": probe_image_hash,
         "web_result_count": web_result_count,
         "record_schema": schema,
-        "local_block_hash": local_block_hash,
         "chain": chain,
     }
+    # Backward compatibility: the traceability field is only committed when it
+    # actually carries a value. Records submitted before Phase 3 (local_block_hash
+    # unset) were hashed without this field, so omitting it when empty keeps the
+    # existing on-chain proof reproducible. New enriched records pass a real
+    # local_block_hash, which then participates in the hash as before.
+    if local_block_hash:
+        payload["local_block_hash"] = local_block_hash
+    return payload
 
 
 def canonical_payload_json_bytes(

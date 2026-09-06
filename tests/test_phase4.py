@@ -35,6 +35,38 @@ def _minimal_tx(**overrides):
     return tx
 
 
+def test_legacy_record_hash_matches_on_chain_proof():
+    """The documented on-chain record must be reproducible exactly.
+
+    The submission record for barack-obama-ee8f7c was created before the
+    local_block_hash traceability field existed, so the canonical payload must
+    omit the field when empty, or this regression test fails.
+    """
+    h = compute_record_hash(
+        subject_id='barack-obama-ee8f7c',
+        similarity=0.9999,
+        result='VERIFIED',
+        probe_image_hash='744dd848fbb0584229169e01c4944664957c62495fb9e8af514a088ebca43e19',
+        web_result_count=10,
+        local_block_hash='',
+    )
+    assert h == '0x97189e2976e5009b8d221605aacb00398100d7974363eab455e6f006d970a456'
+
+
+def test_local_block_hash_participates_when_set():
+    h_with = compute_record_hash(
+        subject_id='s2', similarity=0.8, result='VERIFIED',
+        probe_image_hash='x' * 64, web_result_count=2,
+        local_block_hash='0x' + 'ab' * 32,
+    )
+    h_without = compute_record_hash(
+        subject_id='s2', similarity=0.8, result='VERIFIED',
+        probe_image_hash='x' * 64, web_result_count=2,
+        local_block_hash='',
+    )
+    assert h_with != h_without
+
+
 def test_build_verification_record_passes_through_metadata():
     tx = _minimal_tx(
         block_index=3,
