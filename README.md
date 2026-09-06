@@ -629,7 +629,102 @@ The app exposes these pages:
 - **Web results** — a dedicated view for the reverse-image search results attached
   to a block.
 
+- **Local JSON ledger** — `data/ledger.json`.
+- **Proof of work**: each block hash starts with `DIFFICULTY=4` leading hex zeros (configurable in `config.py`).
+- **Tamper evidence**: `validate_chain()` recomputes every block hash, checks the proof of work and verifies that every block links to its predecessor. The `/verify` page and `/api/chain/validate` report the result block by block.
+- This is a **demo ledger**: the PoW demonstrates tamper evidence, not distributed consensus. The on-chain record is a hash fingerprint of the face verification event and the discovered web/social-media matches — enough to prove the data existed in this form and has not been altered.
 
+## On-chain smart contract
+
+This project also writes a tamper-evident record to a live smart contract,
+FaceVerificationHub, deployed on Polygon Amoy testnet.
+
+- Contract source: `contracts/FaceVerificationHub.sol`
+- ABI: `contracts/FaceVerificationHub.abi.json`
+- Deployment and interaction notes: `docs/SMART_CONTRACT.md`
+- Live proof and cross-verification trail: `docs/onchain-proof.md`
+- Screen-recording narrative: `docs/recording-plan.md`
+- Detailed recording guide and submission form notes: `docs/recording-guide.md`
+
+### What the on-chain bridge does
+
+1. The local pipeline builds a canonical JSON record payload for the face verification result and the discovered web/social matches.
+2. The payload is hashed with Keccak-256.
+3. The hash is submitted to the smart contract as `recordHash` for the subject.
+4. The transaction hash is stored in the local ledger block as `contract_tx_hash`.
+5. The app can then re-verify the local payload against the on-chain record through `/api/history/<subject_id>/contract`.
+
+This is the same model the task asks for: a real blockchain record that can be re-verified against the local data, not just a local simulation.
+
+### Current deployment (update this block when you redeploy)
+
+- Network: Polygon Amoy testnet
+- Contract address: `0x7fc71404Ce10f84B5C467AB3c9806507D422fEf4`
+- Subject ID: `barack-obama-ee8f7c`
+- Transaction hash: `0x0abb16c8429166476a85aa2606fb743404d264e98129fbf2938a6208c9ebb9ae`
+- Polygon block: `46874016`
+- Nonce: `10`
+- Gas used: `54270`
+- Status: `SUCCESS`
+- Similarity: `0.9999`
+- Web results: `10`
+- Local record hash: `0x97189e2976e5009b8d221605aacb00398100d7974363eab455e6f006d970a456`
+- On-chain record hash: `0x97189e2976e5009b8d221605aacb00398100d7974363eab455e6f006d970a456`
+- Transaction on Polygonscan:
+  `https://amoy.polygonscan.com/tx/0x0abb16c8429166476a85aa2606fb743404d264e98129fbf2938a6208c9ebb9ae`
+- Latest verified submission details: `docs/onchain-proof.md`
+
+Never commit wallet private keys. The on-chain config lives in a local, gitignored `config_chain.py` and is supplied via environment variable.
+
+## Reverse image search details
+
+- Engine: **Yandex Images** (`yandex.com/images`) via a headless Chrome driven by Selenium.
+- The flow in headless mode:
+  1. navigate to Yandex Images,
+  2. click the “Search by image” control,
+  3. upload the probe image through the file input,
+  4. wait for the result cards,
+  5. extract the top 10 result URLs and classify each as `social_media`, `image_host`, `blog` or `web`.
+- No API key is required.
+- If the browser cannot start or no results are returned, the pipeline still records an **empty web-search result** on-chain — the face verification step is never blocked by a search failure.
+- Known limitation: headless Chrome on some environments may need an explicit `CHROMIUM_PATH` or a manual ChromeDriver install; web UI layouts change and selectors may need updating.
+
+## Known limitations
+
+- The PoW ledger is local and single-writer; it demonstrates tamper evidence, not distributed consensus or a public chain.
+- `data/` is git-ignored — it contains biometric data (enrollment photos, probes). Never commit or share it.
+- The web search requires a working headless Chrome; if it fails, the pipeline still records the attempt on-chain but won’t have live social-media links.
+- Models: YuNet (face detection) and SFace (face recognition) from OpenCV Zoo, used through `opencv-contrib-python`. They must be downloaded once with `tools/fetch_models.py`.
+- Matching is against **enrolled subjects** only — the pipeline identifies a face, then (only on a match) looks the probe up on the web.
+- The built-in Flask dev server is for local use only.
+- The on-chain contract currently stores one latest record per subject. For a longer audit trail, a per-post append-only registry would be a natural extension.
+
+## Tests
+
+```bash
+.venv\Scripts\python.exe -m pytest -q
+```
+
+Covers the blockchain core (genesis, mining, linking, tamper detection, persistence), the similarity math, the subject registry and the HTTP layer through the Flask test client (with an isolated data directory).
+
+## Configuration (config.py)
+
+```
+DIFFICULTY = 4                    leading hex zeros required per block
+MATCH_THRESHOLD = 0.363           SFace cosine threshold recommended by OpenCV
+MAX_EMBEDDINGS_PER_SUBJECT = 3
+WEB_SEARCH_TIMEOUT = 45           seconds given to the reverse-image search
+MAX_DETECT_SIDE = 640             probes are downscaled before detection
+```
+
+## Tamper demo
+
+```bash
+.venv\Scripts\python.exe tools\tamper_demo.py            # flip a recorded similarity
+.venv\Scripts\python.exe tools\tamper_demo.py --restore  # fresh chain
+```
+
+After tampering, the Verify page and `/api/chain/validate` report the chain as INVALID and name the offending block.
 
 ## JSON API
 
