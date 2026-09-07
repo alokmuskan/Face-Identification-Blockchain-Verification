@@ -55,6 +55,13 @@ COPY . .
 # boots and reports /health as degraded until the models are present.
 RUN python tools/fetch_models.py || true
 
+# Runtime libs for OpenCV (imdecode/imencode/DNN headless) and for headless
+# Chrome, where some Mesa/GTK components are still pulled at runtime by
+# Chrome's sandbox and by libGL-linked libraries.
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        libgl1 libglib2.0-0 libgthread-2.0-0 libgbm1 libasound2 libatk1.0-0 \
+    && rm -rf /var/lib/apt/lists/*
+
 # Runtime data (git-ignored in the repo, but needed by the app).
 RUN mkdir -p data/faces data/probes data/webcache
 
