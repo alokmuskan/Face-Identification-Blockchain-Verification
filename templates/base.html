@@ -3,15 +3,23 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>{% block title %}Face Chain Verify{% endblock %}</title>
+<title>{% block title %}Face Identification &amp; Blockchain Verification{% endblock %}</title>
 <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 {% block extra_head %}{% endblock %}
 </head>
 <body>
-<div class="top-accent"></div>
-<header class="topbar">
-  <a class="brand" href="{{ url_for('dashboard') }}">Face<span>Chain</span>Verify</a>
-  <nav class="nav">
+<div class="grid-bg"></div>
+<header class="shell-header">
+  <div class="shell-brand">
+    <span class="shell-logo"></span>
+    <span class="shell-name">Face Chain Verify</span>
+    <span class="shell-tag">Identity Verification &middot; Blockchain Proof</span>
+  </div>
+  <div class="shell-status">
+    <span class="status-pill status-online"><span class="status-dot"></span>System online</span>
+    <span class="status-pill status-chain"><span class="status-mark">◆</span>Polygon Amoy</span>
+  </div>
+  <nav class="shell-nav" aria-label="Main navigation">
     <a href="{{ url_for('dashboard') }}">Dashboard</a>
     <a href="{{ url_for('demo_page') }}">Live Demo</a>
     <a href="{{ url_for('register') }}">Register</a>
@@ -21,10 +29,12 @@
     <a href="{{ url_for('api_docs') }}">API</a>
   </nav>
 </header>
-<main class="container">
+<main class="shell-main">
 {% block content %}{% endblock %}
 </main>
-<footer class="footer">Face Identification and Blockchain Verification &middot; local demo &middot; all data stays on this machine.</footer>
+<footer class="shell-footer">
+  Face Identification &amp; Blockchain Verification &middot; local demo &middot; all data stays on this machine.
+</footer>
 {% block scripts %}{% endblock %}
 </body>
 </html>

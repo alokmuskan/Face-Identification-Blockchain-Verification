@@ -2,81 +2,97 @@
 {% block title %}Dashboard - Face Chain Verify{% endblock %}
 {% block content %}
 <h1>Dashboard</h1>
+<p class="muted">System status overview and recent activity.</p>
 
-<section class="pipeline-wrap">
-  <div class="pipeline">
-    <div class="stage">
-      <div class="stage-dot"></div>
-      <div class="stage-body">
-        <div class="stage-tag">Step 1</div>
-        <div class="stage-title">Face scan</div>
-        <div class="stage-desc">Upload or capture a photo. The system detects a face and encodes it into a 128-d embedding.</div>
+{% set tray_items = [
+  ('shield', 'Verified identity proof'),
+  ('chip', 'Polygon Amoy'),
+  ('link', 'On-chain record'),
+  ('scan', 'Face scan'),
+  ('cube', 'Local ledger'),
+  ('check', 'Tamper-evident'),
+  ('external', 'Polygonscan'),
+  ('copy', 'Copy proof'),
+  ('alert', 'Status'),
+  ('grid', 'Network'),
+] %}
+<section class="pipeline" aria-label="Pipeline stages">
+  <div class="pipeline-cols">
+    <div class="pipeline-col">
+      <div class="pipeline-index">1</div>
+      <div class="pipeline-card">
+        <div class="pipeline-tag">Ingestion</div>
+        <div class="pipeline-title">Face scan</div>
+        <div class="pipeline-desc">Upload or capture a photo. The system detects a face and encodes it into a 128-d embedding.</div>
       </div>
     </div>
-    <div class="connector"></div>
-    <div class="stage">
-      <div class="stage-dot"></div>
-      <div class="stage-body">
-        <div class="stage-tag">Step 2</div>
-        <div class="stage-title">Identify</div>
-        <div class="stage-desc">The embedding is matched against enrolled subjects. A confident match identifies the person.</div>
+    <div class="pipeline-col">
+      <div class="pipeline-index">2</div>
+      <div class="pipeline-card">
+        <div class="pipeline-tag">Matching</div>
+        <div class="pipeline-title">Identify</div>
+        <div class="pipeline-desc">The embedding is matched against enrolled subjects. A confident match identifies the person.</div>
       </div>
     </div>
-    <div class="connector"></div>
-    <div class="stage">
-      <div class="stage-dot"></div>
-      <div class="stage-body">
-        <div class="stage-tag">Step 3</div>
-        <div class="stage-title">Web / social search</div>
-        <div class="stage-desc">A reverse image search finds matching posts and images across the web.</div>
+    <div class="pipeline-col">
+      <div class="pipeline-index">3</div>
+      <div class="pipeline-card">
+        <div class="pipeline-tag">Evidence</div>
+        <div class="pipeline-title">Web / social search</div>
+        <div class="pipeline-desc">A reverse image search finds matching posts and images across the web.</div>
       </div>
     </div>
-    <div class="connector"></div>
-    <div class="stage">
-      <div class="stage-dot"></div>
-      <div class="stage-body">
-        <div class="stage-tag">Step 4</div>
-        <div class="stage-title">On-chain record</div>
-        <div class="stage-desc">The face match, probe hash, and discovered web results are written to an immutable ledger.</div>
+    <div class="pipeline-col">
+      <div class="pipeline-index">4</div>
+      <div class="pipeline-card">
+        <div class="pipeline-tag">Commitment</div>
+        <div class="pipeline-title">On-chain record</div>
+        <div class="pipeline-desc">The face match, probe hash, and discovered web results are written to an immutable ledger.</div>
       </div>
     </div>
-    <div class="connector"></div>
-    <div class="stage">
-      <div class="stage-dot"></div>
-      <div class="stage-body">
-        <div class="stage-tag">Step 5</div>
-        <div class="stage-title">Verify</div>
-        <div class="stage-desc">The chain is re-validated so any later tampering becomes immediately visible.</div>
+    <div class="pipeline-col">
+      <div class="pipeline-index">5</div>
+      <div class="pipeline-card">
+        <div class="pipeline-tag">Re-validation</div>
+        <div class="pipeline-title">Verify</div>
+        <div class="pipeline-desc">The chain is re-validated so any later tampering becomes immediately visible.</div>
       </div>
     </div>
   </div>
 </section>
 
-<section class="cards">
-  <div class="card">
-    <div class="card-value">{{ stats.subjects }}</div>
-    <div class="card-label">Registered subjects</div>
+<section class="metrics" aria-label="System metrics">
+  <div class="metric">
+    <div class="metric-label">Registered subjects</div>
+    <div class="metric-value">{{ stats.subjects }}</div>
+    <div class="metric-meta">enrolled identities</div>
   </div>
-  <div class="card">
-    <div class="card-value">{{ stats.blocks }}</div>
-    <div class="card-label">Blocks mined</div>
+  <div class="metric">
+    <div class="metric-label">Blocks mined</div>
+    <div class="metric-value">{{ stats.blocks }}</div>
+    <div class="metric-meta">verified records</div>
   </div>
-  <div class="card">
-    <div class="card-value">{{ stats.pending_transactions }}</div>
-    <div class="card-label">Pending transactions</div>
+  <div class="metric">
+    <div class="metric-label">Pending transactions</div>
+    <div class="metric-value">{{ stats.pending_transactions }}</div>
+    <div class="metric-meta">awaiting confirmation</div>
   </div>
-  <div class="card">
-    <div class="card-value {% if stats.chain_valid %}ok{% else %}bad{% endif %}">{% if stats.chain_valid %}VALID{% else %}INVALID{% endif %}</div>
-    <div class="card-label">Chain integrity</div>
+  <div class="metric {% if stats.chain_valid %}accent-green{% else %}accent-red{% endif %}">
+    <div class="metric-label">Chain integrity</div>
+    <div class="metric-value">{% if stats.chain_valid %}VALID{% else %}INVALID{% endif %}</div>
+    <div class="metric-meta">{% if stats.chain_valid %}chain intact{% else %}possible tampering{% endif %}</div>
   </div>
 </section>
 
 <section class="panel panel-note">
-  <p class="muted">Every verification creates a tamper-evident record on a local proof-of-work blockchain. Each block carries the face match result, the probe image hash, and any discovered web / social media results.</p>
+  <p>Every verification creates a tamper-evident record on a local proof-of-work blockchain. Each block carries the face match result, the probe image hash, and any discovered web / social media results.</p>
 </section>
 
-<section class="panel">
-  <h2>Recent on-chain events</h2>
+<section class="panel event-panel">
+  <div class="panel-head">
+    <h2>Recent on-chain events</h2>
+    <span class="panel-meta">{% if events %}{{ events | length }}{% else %}0{% endif %} event{{ 's' if events | length != 1 }}</span>
+  </div>
   {% if events %}
   <table>
     <thead><tr><th>Time</th><th>Type</th><th>Subject</th><th>Result</th><th>Similarity</th><th>Block</th></tr></thead>
@@ -107,14 +123,17 @@
 <section class="panel">
   <h2>Enrolled subjects</h2>
   {% if subjects %}
-  <ul class="subjects">
+  <div class="subjects">
     {% for subject in subjects %}
-    <li>
-      <a href="{{ url_for('history', subject_id=subject.subject_id) }}">{{ subject.name }}</a>
-      <span class="muted">{{ subject.embedding_count }} embedding(s) - updated {{ subject.updated_at | dt }}</span>
-    </li>
+    <a class="subject-row" href="{{ url_for('history', subject_id=subject.subject_id) }}">
+      <div class="subject-row-main">
+        <span class="subject-name">{{ subject.name }}</span>
+        <span class="subject-meta">{{ subject.embedding_count }} embedding{{ 's' if subject.embedding_count != 1 }} &middot; updated {{ subject.updated_at | dt }}</span>
+      </div>
+      <span class="subject-arrow" aria-hidden="true">→</span>
+    </a>
     {% endfor %}
-  </ul>
+  </div>
   {% else %}
   <p class="muted">No subjects enrolled yet. Head to the Register page.</p>
   {% endif %}
