@@ -1,16 +1,16 @@
 {% extends 'base.html' %}
-{% block title %}Identify — VERIFAI{% endblock %}
+{% block title %}Identify — Face Identification &amp; Blockchain Verification{% endblock %}
 {% block content %}
 
-<section class="shell-hero">
-  <div class="shell-hero-eyebrow">Verification workspace</div>
+<section class="page-hero">
+  <div class="page-hero-eyebrow">Verification workspace</div>
   <h1>Verify an identity</h1>
-  <p class="shell-hero-desc">Submit a probe photo. The system matches it against enrolled subjects, searches the web for matching public images, records the outcome on the local ledger, and if configured submits a cryptographic proof to Polygon Amoy.</p>
+  <p class="lead">Submit a probe photo. The system matches it against enrolled subjects, searches the web for matching public images, records the outcome on the local ledger, and if configured submits a cryptographic proof to Polygon Amoy.</p>
 </section>
 
 {% if error %}
 <section class="panel">
-  <div class="alert bad">{{ error }}</div>
+  <div class="alert bad" role="alert">{{ error }}</div>
 </section>
 {% endif %}
 
@@ -19,6 +19,7 @@
   <section class="panel identify-source">
     <div class="panel-head">
       <div class="panel-title">Image source</div>
+      <span class="panel-meta">upload or capture</span>
     </div>
     <form method="post" enctype="multipart/form-data" class="stack" id="identify-form">
       {% include '_capture.html' %}
@@ -41,7 +42,6 @@
       <span class="badge {{ 'ok' if result.result == 'VERIFIED' else 'error' }}">{{ result.result }}</span>
     </div>
 
-    {# Identity headline #}
     <div class="verify-identity">
       <div class="verify-identity-status">
         {% if result.match.subject %}
@@ -65,7 +65,6 @@
         {% endif %}
       </div>
 
-      {# Similarity meter #}
       <div class="verify-meter">
         <div class="verify-meter-label">
           <span class="verify-meter-title">SIMILARITY</span>
@@ -88,7 +87,6 @@
       </div>
     </div>
 
-    {# Pipeline timeline #}
     <div class="pipeline-mini">
       <div class="pipeline-mini-title">Verification pipeline</div>
       <ol class="pipeline-mini-steps">
@@ -101,14 +99,13 @@
       </ol>
     </div>
 
-    {# Blockchain proof card #}
     {% set tx = result.transaction %}
     {% set onchain_hash = tx.on_chain_record_hash | default(tx.contract_on_chain_hash | default('')) %}
     {% set contract_tx = tx.contract_tx_hash | default(tx.on_chain_tx_hash | default('')) %}
     {% set contract_chain = tx.contract_chain | default(tx.on_chain_chain | default('polygon-amoy')) %}
     {% set contract_confirmed = tx.contract_confirmed | default(tx.on_chain_confirmed | default(false)) %}
     {% set local_hash = tx.local_record_hash | default('') %}
-    <div class="panel proof-card {{ 'ok' if contract_tx else 'neutral' }}">
+    <section class="panel proof-card {{ 'ok' if contract_tx else 'neutral' }}">
       <div class="panel-head">
         <div class="panel-title">Blockchain proof</div>
         {% if contract_tx %}
@@ -118,68 +115,122 @@
         {% endif %}
       </div>
 
-      <dl class="kv">
-        <dt>Network</dt><dd>Contract chain <code>{{ contract_chain }}</code></dd>
-        <dt>Record hash</dt>
-        <dd>
+      <div class="proof-top">
+        <div class="proof-cell">
+          <div class="proof-label">Network</div>
+          <div class="proof-val mono">{{ contract_chain }}</div>
+        </div>
+        <div class="proof-cell">
+          <div class="proof-label">Status</div>
+          <div class="proof-status {% if contract_tx %}ok{% else %}neutral{% endif %}">{% if contract_tx %}Confirmed{% else %}Pending{% endif %}</div>
+        </div>
+        <div class="proof-cell">
+          <div class="proof-label">Local block</div>
+          <div class="proof-val">Block #{{ result.block.index }} &middot; mined {{ result.block.timestamp | dt }}</div>
+        </div>
+      </div>
+
+      <div class="proof-hashes">
+        <div class="hash-block">
+          <div class="hash-block-title">Local record hash</div>
           {% if local_hash %}
-          <span class="hash">
-            <span class="h-label">Local</span>
+          <div class="hash mono">
             <span class="h-val">{{ local_hash }}</span>
-          </span>
+          </div>
           {% else %}
-          <span class="muted">—</span>
+          <div class="muted">—</div>
           {% endif %}
-        </dd>
-        <dt>On-chain hash</dt>
-        <dd>
+        </div>
+        <div class="hash-gap" aria-hidden="true">⇅</div>
+        <div class="hash-block">
+          <div class="hash-block-title">On-chain record hash</div>
           {% if onchain_hash %}
-          <span class="hash">
-            <span class="h-label">On-chain</span>
+          <div class="hash mono">
             <span class="h-val">{{ onchain_hash }}</span>
-          </span>
+          </div>
           {% else %}
-          <span class="muted">—</span>
+          <div class="muted">—</div>
           {% endif %}
-        </dd>
-        {% if contract_tx %}
-        <dt>Transaction hash</dt>
-        <dd>
-          <span class="hash">
-            <span class="h-label"></span>
-            <span class="h-val">{{ contract_tx }}</span>
-            <button class="hash-copy" data-copy="{{ contract_tx }}" data-copied="Copied">Copy</button>
-          </span>
-        </dd>
-        <dt>Block</dt>
-        <dd>{{ tx.contract_block | default(tx.on_chain_block | default('—')) }}</dd>
-        <dt>Gas used</dt>
-        <dd>{{ tx.contract_gas | default(tx.on_chain_gas | default('—')) }}</dd>
-        {% endif %}
-        <dt>Local block</dt>
-        <dd>Block #{{ result.block.index }} — mined {{ result.block.timestamp | dt }}</dd>
-        <dt>Local block hash</dt>
-        <dd><span class="hash"><span class="h-label"></span><span class="h-val">{{ result.block.hash }}</span></span></dd>
-      </dl>
+        </div>
+      </div>
 
       {% if contract_tx %}
-      <div class="proof-links">
-        <a class="btn ghost small" href="https://amoy.polygonscan.com/tx/{{ contract_tx }}" target="_blank" rel="noopener">View on Polygonscan</a>
-        {% if contract_chain == 'polygon-amoy' and tx.contract_address %}
-        <a class="btn ghost small" href="https://amoy.polygonscan.com/address/{{ tx.contract_address }}" target="_blank" rel="noopener">Contract address</a>
-        {% endif %}
+      <div class="proof-tx">
+        <div class="proof-label">Transaction hash</div>
+        <div class="hash mono">
+          <span class="h-val">{{ contract_tx }}</span>
+          <button class="hash-copy" data-copy="{{ contract_tx }}" data-copied="Copied">Copy</button>
+        </div>
+        <div class="proof-meta">
+          <span>Block <strong>{{ tx.contract_block | default(tx.on_chain_block | default('—')) }}</strong></span>
+          &middot;
+          <span>Gas <strong>{{ tx.contract_gas | default(tx.on_chain_gas | default('—')) }}</strong></span>
+        </div>
+        <div class="proof-links">
+          <a class="btn primary small" href="https://amoy.polygonscan.com/tx/{{ contract_tx }}" target="_blank" rel="noopener">View on Polygonscan</a>
+          {% if contract_chain == 'polygon-amoy' and tx.contract_address %}
+          <a class="btn ghost small" href="https://amoy.polygonscan.com/address/{{ tx.contract_address }}" target="_blank" rel="noopener">Contract address</a>
+          {% endif %}
+        </div>
       </div>
       {% else %}
-      <div class="muted">No on-chain record was created for this run. The local ledger still holds the event.</div>
+      <div class="proof-empty">No on-chain record was created for this run. The local ledger still holds the event.</div>
       {% endif %}
-    </div>
+    </section>
 
-    {# Evidence strip #}
     {% if result.web_results %}
-    <section class="panel identify-evidence">
+    <section class="panel proof-card neutral">
+      <div class="panel-head">
+        <div class="panel-title">Blockchain proof</div>
+        <span class="badge neutral">Pending</span>
+      </div>
+      <div class="proof-empty">No on-chain record was created for this run. The local ledger still holds the event.</div>
+    </section>
+
+  <section class="panel proof-card neutral">
+      <div class="panel-head">
+        <div class="panel-title">Blockchain proof</div>
+        <span class="badge neutral">Pending</span>
+      </div>
+      <div class="proof-empty">No on-chain record was created for this run. The local ledger still holds the event.</div>
+    </section>
+
+  <section class="panel proof-card neutral">
+      <div class="panel-head">
+        <div class="panel-title">Blockchain proof</div>
+        <span class="badge neutral">Pending</span>
+      </div>
+      <div class="proof-empty">No on-chain record was created for this run. The local ledger still holds the event.</div>
+    </section>
+
+  <section class="panel proof-card neutral">
+      <div class="panel-head">
+        <div class="panel-title">Blockchain proof</div>
+        <span class="badge neutral">Pending</span>
+      </div>
+      <div class="proof-empty">No on-chain record was created for this run. The local ledger still holds the event.</div>
+    </section>
+
+  <section class="panel proof-card neutral">
+      <div class="panel-head">
+        <div class="panel-title">Blockchain proof</div>
+        <span class="badge neutral">Pending</span>
+      </div>
+      <div class="proof-empty">No on-chain record was created for this run. The local ledger still holds the event.</div>
+    </section>
+
+  <section class="panel proof-card neutral">
+      <div class="panel-head">
+        <div class="panel-title">Blockchain proof</div>
+        <span class="badge neutral">Pending</span>
+      </div>
+      <div class="proof-empty">No on-chain record was created for this run. The local ledger still holds the event.</div>
+    </section>
+
+  <section class="panel identify-evidence">
       <div class="panel-head">
         <div class="panel-title">Web evidence</div>
-        <div class="evidence-meta">{{ result.web_results | length }} source(s) discovered</div>
+        <div class="evidence-meta">{{ result.web_results | length }} source{{ 's' if result.web_results | length != 1 }} discovered</div>
       </div>
 
       {% set probe_img = result.probe_path | default('') %}
@@ -225,7 +276,7 @@
     </div>
     {% endif %}
   {% endif %}
-}</div>
+</div>
 
 {% endblock %}
 {% block scripts %}
