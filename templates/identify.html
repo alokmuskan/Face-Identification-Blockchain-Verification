@@ -1,87 +1,236 @@
 {% extends 'base.html' %}
-{% block title %}Identify - Face Chain Verify{% endblock %}
+{% block title %}Identify — VERIFAI{% endblock %}
 {% block content %}
-<h1>Identify a face</h1>
-<p class='muted'>Submit a probe photo. The system matches it against enrolled subjects, records the outcome on the blockchain and returns the verdict.</p>
 
-<section class='panel'>
-  <form method='post' enctype='multipart/form-data' class='stack' id='identify-form'>
-    {% include '_capture.html' %}
-    <button type='submit' class='btn primary' id='identify-btn'>Identify and record</button>
-    <p class='muted' id='identify-progress' hidden>
-      <span class='spinner'></span>
-      <span id='identify-stage'>Matching face against enrolled subjects…</span>
-      The reverse image search can take up to ~45 seconds. Do not close this page.
-    </p>
-  </form>
+<section class="shell-hero">
+  <div class="shell-hero-eyebrow">Verification workspace</div>
+  <h1>Verify an identity</h1>
+  <p class="shell-hero-desc">Submit a probe photo. The system matches it against enrolled subjects, searches the web for matching public images, records the outcome on the local ledger, and if configured submits a cryptographic proof to Polygon Amoy.</p>
 </section>
 
-{% if error %}<div class='alert bad'>{{ error }}</div>{% endif %}
-
-{% if result %}
-<section class='panel result'>
-  <h2>
-    {% if result.result == 'VERIFIED' %}<span class='badge ok'>VERIFIED</span>{% else %}<span class='badge bad'>REJECTED</span>{% endif %}
-    {% if result.match.subject %}Matched: {{ result.match.subject.name }}{% elif result.match.candidate %}Closest: {{ result.match.candidate.name }} (below threshold){% else %}No subjects enrolled yet{% endif %}
-  </h2>
-  <p>Cosine similarity <strong>{{ result.match.similarity }}</strong> against threshold <strong>{{ result.match.threshold }}</strong>.</p>
-  <div class='simbar'><div class='simbar-fill {{ 'ok' if result.match.matched else 'bad' }}' style='width: {{ ((result.match.similarity + 1) / 2 * 100) | round(1) }}%;'></div></div>
-  <dl class='kv'>
-    <dt>Probe image hash</dt><dd><code class='wrap'>{{ result.transaction.probe_image_hash }}</code></dd>
-    <dt>Block</dt><dd>#{{ result.block.index }} - mined {{ result.block.timestamp | dt }}</dd>
-    <dt>Block hash</dt><dd><code class='wrap'>{{ result.block.hash }}</code></dd>
-  </dl>
-  {% if result.match.subject %}
-  <p><a class='btn secondary' href='{{ url_for('history', subject_id=result.match.subject.subject_id) }}'>View subject history</a></p>
-  {% endif %}
-
-  {% if result.web_results %}
-  <section class='panel'>
-    <h2>Web / social media matches</h2>
-    <p class='muted'>Reverse image search returned {{ result.web_results | length }} result(s) for the probe image.</p>
-
-    {# Thumbnail strip: use a real Yandex thumbnail when available, otherwise the probe face itself. #}
-    {% set probe_img = result.probe_path | default('') %}
-    <div class='thumbs thumbs-search'>
-      {% for hit in result.web_results[:8] %}
-      <a class='thumb-card' href='{{ hit.url }}' target='_blank' title='{{ hit.title }}'>
-        {% if hit.image_url %}
-        <img src='{{ hit.image_url }}' alt='match thumbnail' loading='lazy'>
-        {% elif probe_img %}
-        <img src='{{ url_for('media', relpath=probe_img) }}' alt='probe face' loading='lazy'>
-        {% else %}
-        <div class='thumb-fallback'>Face scan</div>
-        {% endif %}
-        <span class='thumb-tag {{ 'ok' if hit.page_type == 'social_media' else 'badge' }}'>{{ hit.page_type }}</span>
-      </a>
-      {% endfor %}
-    </div>
-    <p class='muted thumbs-note'>Click a thumbnail to open the matching page.</p>
-
-    {% for hit in result.web_results %}
-    <div class='search-hit'>
-      <div class='hit-head'>
-        <span class='badge {{ 'ok' if hit.page_type == 'social_media' else 'badge' }}'>{{ hit.page_type }}</span>
-        <a href='{{ hit.url }}' target='_blank'>{{ hit.title }}</a>
-      </div>
-      <p class='muted'>{{ hit.description }}</p>
-      <div class='hit-actions'>
-        <a href='{{ hit.url }}' target='_blank' class='btn secondary small'>Open link</a>
-        {% if hit.image_url %}
-        <a href='{{ hit.image_url }}' target='_blank' class='btn secondary small'>View image</a>
-        {% endif %}
-      </div>
-    </div>
-    {% endfor %}
-  </section>
-  {% else %}
-  <p class='muted'>Reverse image search did not return external matches for this image.</p>
-  {% endif %}
+{% if error %}
+<section class="panel">
+  <div class="alert bad">{{ error }}</div>
 </section>
 {% endif %}
+
+<div class="identify-grid">
+
+  <section class="panel identify-source">
+    <div class="panel-head">
+      <div class="panel-title">Image source</div>
+    </div>
+    <form method="post" enctype="multipart/form-data" class="stack" id="identify-form">
+      {% include '_capture.html' %}
+      <div class="identify-actions">
+        <button type="submit" class="btn primary large" id="identify-btn">Identify and record</button>
+        <span class="identify-hint">Upload a clear face photo, or use the camera.</span>
+      </div>
+      <p class="muted" id="identify-progress" hidden>
+        <span class="spinner"></span>
+        <span id="identify-stage">Matching face against enrolled subjects…</span>
+        The reverse image search can take up to ~45 seconds. Do not close this page.
+      </p>
+    </form>
+  </section>
+
+  {% if result %}
+  <section class="panel identify-result">
+    <div class="panel-head">
+      <div class="panel-title">Verification result</div>
+      <span class="badge {{ 'ok' if result.result == 'VERIFIED' else 'error' }}">{{ result.result }}</span>
+    </div>
+
+    {# Identity headline #}
+    <div class="verify-identity">
+      <div class="verify-identity-status">
+        {% if result.match.subject %}
+        <span class="verify-icon ok" aria-hidden="true"></span>
+        <div class="verify-identity-text">
+          <div class="verify-identity-name">{{ result.match.subject.name }}</div>
+          <div class="verify-identity-sub">High-confidence match</div>
+        </div>
+        {% elif result.match.candidate %}
+        <span class="verify-icon warn" aria-hidden="true"></span>
+        <div class="verify-identity-text">
+          <div class="verify-identity-name">{{ result.match.candidate.name }}</div>
+          <div class="verify-identity-sub">Below threshold</div>
+        </div>
+        {% else %}
+        <span class="verify-icon neutral" aria-hidden="true"></span>
+        <div class="verify-identity-text">
+          <div class="verify-identity-name">No match</div>
+          <div class="verify-identity-sub">No enrolled subjects found</div>
+        </div>
+        {% endif %}
+      </div>
+
+      {# Similarity meter #}
+      <div class="verify-meter">
+        <div class="verify-meter-label">
+          <span class="verify-meter-title">SIMILARITY</span>
+          <span class="verify-meter-value">{{ result.match.similarity * 100 | round(2) }}%</span>
+        </div>
+        <div class="verify-meter-track">
+          <div class="verify-meter-fill {{ 'ok' if result.match.matched else 'error' }}" style="width: {{ result.match.similarity * 100 | round(1) }}%"></div>
+          {% if result.match.matched %}
+          <div class="verify-meter-mark" style="left: {{ result.match.threshold * 100 }}%"></div>
+          {% endif %}
+        </div>
+        <div class="verify-meter-foot">
+          <span class="verify-meter-threshold">Threshold <strong>{{ result.match.threshold * 100 | round(2) }}%</strong></span>
+          {% if result.match.matched %}
+          <span class="badge ok">Match</span>
+          {% else %}
+          <span class="badge warn">Below threshold</span>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+
+    {# Pipeline timeline #}
+    <div class="pipeline-mini">
+      <div class="pipeline-mini-title">Verification pipeline</div>
+      <ol class="pipeline-mini-steps">
+        <li><span>Face captured</span></li>
+        <li><span>Face detected</span></li>
+        <li><span>Identity matched</span></li>
+        <li><span>Web evidence searched</span></li>
+        <li><span>Local block mined</span></li>
+        <li><span>{% if result.transaction.contract_tx_hash or result.transaction.on_chain_tx_hash %}On-chain proof submitted{% else %}On-chain proof not submitted{% endif %}</span></li>
+      </ol>
+    </div>
+
+    {# Blockchain proof card #}
+    {% set tx = result.transaction %}
+    {% set onchain_hash = tx.on_chain_record_hash | default(tx.contract_on_chain_hash | default('')) %}
+    {% set contract_tx = tx.contract_tx_hash | default(tx.on_chain_tx_hash | default('')) %}
+    {% set contract_chain = tx.contract_chain | default(tx.on_chain_chain | default('polygon-amoy')) %}
+    {% set contract_confirmed = tx.contract_confirmed | default(tx.on_chain_confirmed | default(false)) %}
+    {% set local_hash = tx.local_record_hash | default('') %}
+    <div class="panel proof-card {{ 'ok' if contract_tx else 'neutral' }}">
+      <div class="panel-head">
+        <div class="panel-title">Blockchain proof</div>
+        {% if contract_tx %}
+        <span class="badge ok"><span class="b-dot"></span>Confirmed</span>
+        {% else %}
+        <span class="badge neutral">Pending</span>
+        {% endif %}
+      </div>
+
+      <dl class="kv">
+        <dt>Network</dt><dd>Contract chain <code>{{ contract_chain }}</code></dd>
+        <dt>Record hash</dt>
+        <dd>
+          {% if local_hash %}
+          <span class="hash">
+            <span class="h-label">Local</span>
+            <span class="h-val">{{ local_hash }}</span>
+          </span>
+          {% else %}
+          <span class="muted">—</span>
+          {% endif %}
+        </dd>
+        <dt>On-chain hash</dt>
+        <dd>
+          {% if onchain_hash %}
+          <span class="hash">
+            <span class="h-label">On-chain</span>
+            <span class="h-val">{{ onchain_hash }}</span>
+          </span>
+          {% else %}
+          <span class="muted">—</span>
+          {% endif %}
+        </dd>
+        {% if contract_tx %}
+        <dt>Transaction hash</dt>
+        <dd>
+          <span class="hash">
+            <span class="h-label"></span>
+            <span class="h-val">{{ contract_tx }}</span>
+            <button class="hash-copy" data-copy="{{ contract_tx }}" data-copied="Copied">Copy</button>
+          </span>
+        </dd>
+        <dt>Block</dt>
+        <dd>{{ tx.contract_block | default(tx.on_chain_block | default('—')) }}</dd>
+        <dt>Gas used</dt>
+        <dd>{{ tx.contract_gas | default(tx.on_chain_gas | default('—')) }}</dd>
+        {% endif %}
+        <dt>Local block</dt>
+        <dd>Block #{{ result.block.index }} — mined {{ result.block.timestamp | dt }}</dd>
+        <dt>Local block hash</dt>
+        <dd><span class="hash"><span class="h-label"></span><span class="h-val">{{ result.block.hash }}</span></span></dd>
+      </dl>
+
+      {% if contract_tx %}
+      <div class="proof-links">
+        <a class="btn ghost small" href="https://amoy.polygonscan.com/tx/{{ contract_tx }}" target="_blank" rel="noopener">View on Polygonscan</a>
+        {% if contract_chain == 'polygon-amoy' and tx.contract_address %}
+        <a class="btn ghost small" href="https://amoy.polygonscan.com/address/{{ tx.contract_address }}" target="_blank" rel="noopener">Contract address</a>
+        {% endif %}
+      </div>
+      {% else %}
+      <div class="muted">No on-chain record was created for this run. The local ledger still holds the event.</div>
+      {% endif %}
+    </div>
+
+    {# Evidence strip #}
+    {% if result.web_results %}
+    <section class="panel identify-evidence">
+      <div class="panel-head">
+        <div class="panel-title">Web evidence</div>
+        <div class="evidence-meta">{{ result.web_results | length }} source(s) discovered</div>
+      </div>
+
+      {% set probe_img = result.probe_path | default('') %}
+      <div class="thumbs thumbs-search">
+        {% for hit in result.web_results[:12] %}
+        <a class="thumb-card" href="{{ hit.url }}" target="_blank" rel="noopener" title="{{ hit.title | default(hit.url) }}">
+          {% if hit.image_url %}
+          <img src="{{ hit.image_url }}" alt="match thumbnail" loading="lazy">
+          {% elif probe_img %}
+          <img src="{{ url_for('media', relpath=probe_img) }}" alt="probe face" loading="lazy">
+          {% else %}
+          <div class="thumb-fallback">Face scan</div>
+          {% endif %}
+          <span class="thumb-tag {{ 'ok' if hit.page_type == 'social_media' else 'neutral' }}">{{ hit.page_type | default('web') }}</span>
+        </a>
+        {% endfor %}
+      </div>
+
+      <div class="evidence-list">
+        {% for hit in result.web_results %}
+        <div class="evidence-item">
+          <div class="evidence-head">
+            <span class="badge {{ 'ok' if hit.page_type == 'social_media' else 'neutral' }}">{{ hit.page_type | default('web') }}</span>
+            <a href="{{ hit.url }}" target="_blank" rel="noopener" class="evidence-title">{{ hit.title | default(hit.url) }}</a>
+          </div>
+          {% if hit.description %}<p class="evidence-desc">{{ hit.description }}</p>{% endif %}
+          <div class="evidence-actions">
+            <a href="{{ hit.url }}" target="_blank" rel="noopener" class="btn ghost small">Open page</a>
+            {% if hit.image_url %}
+            <a href="{{ hit.image_url }}" target="_blank" rel="noopener" class="btn ghost small">View image</a>
+            {% endif %}
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+    </section>
+    {% endif %}
+
+    {% if result.match.subject %}
+    <div class="identify-foot">
+      <a class="btn ghost" href="{{ url_for('history', subject_id=result.match.subject.subject_id) }}">Subject history</a>
+      <a class="btn ghost" href="{{ url_for('ledger') }}">Open ledger</a>
+    </div>
+    {% endif %}
+  {% endif %}
+}</div>
+
 {% endblock %}
 {% block scripts %}
-<script src='{{ url_for('static', filename='capture.js') }}'></script>
+<script src="{{ url_for('static', filename='capture.js') }}"></script>
+<script src="{{ url_for('static', filename='ui-helpers.js') }}"></script>
 <script>
 (function () {
   var form = document.getElementById('identify-form');
@@ -89,16 +238,20 @@
   var btn = document.getElementById('identify-btn');
   var progress = document.getElementById('identify-progress');
   var stage = document.getElementById('identify-stage');
+
+  var stages = [
+    'Matching face against enrolled subjects…',
+    'Face matched — running reverse image search (up to ~45s)…',
+    'Search finished — mining the local block…',
+    'Submitting the record on-chain…'
+  ];
+
   form.addEventListener('submit', function () {
-    if (btn) { btn.disabled = true; btn.textContent = 'Running pipeline…'; }
-    if (progress) progress.hidden = false;
-    // Advance the status line while the request is in flight.
-    var stages = [
-      'Matching face against enrolled subjects…',
-      'Face matched — running reverse image search (up to ~45s)…',
-      'Search finished — mining the local block…',
-      'Submitting the record on-chain…'
-    ];
+    if (!btn || !progress) return;
+    btn.disabled = true;
+    btn.textContent = 'Running pipeline…';
+    progress.hidden = false;
+    if (stage) stage.textContent = stages[0];
     var i = 0;
     if (window.__identifyStageTimer) clearInterval(window.__identifyStageTimer);
     window.__identifyStageTimer = setInterval(function () {
